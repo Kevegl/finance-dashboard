@@ -1,0 +1,3 @@
+"ClientAccountID","AssetClass","Symbol","Description","ListingExchange","TradeDate","Quantity","TradePrice","CurrencyPrimary","IBCommission","Buy/Sell","TradeID"
+"U1234567","STK","VWRA","VANGUARD FTSE ALL-WORLD USDA","LSEETF","20240110","10","112.5","USD","-1.7","BUY","1001"
+"U1234567","STK","CHSPI","ISHARES CORE SPI CH","EBS","20240502","5","165.4","CHF","-5","BUY","1002"

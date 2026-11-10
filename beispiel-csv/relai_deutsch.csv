@@ -1,0 +1,4 @@
+Datum,Transaktionstyp,BTC-Betrag,BTC-Kurs,Währungspaar,Fiat-Betrag (exkl. Gebühren),Fiat-Währung,Gebühr,Gebührenwährung,Zielplattform,Operation ID
+2024-12-30T10:00:00Z,Kauf,0.00120000,82500.00,BTC/CHF,99.00,CHF,1.00,CHF,Relai,a1
+2024-12-16T10:00:00Z,Kauf,0.00110000,90000.00,BTC/CHF,99.00,CHF,1.00,CHF,Relai,a2
+2024-12-02T10:00:00Z,Kauf,0.00115000,86000.00,BTC/CHF,99.00,CHF,1.00,CHF,Relai,a3

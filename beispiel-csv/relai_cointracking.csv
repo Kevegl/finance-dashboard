@@ -1,0 +1,4 @@
+"Type","Buy Amount","Buy Currency","Sell Amount","Sell Currency","Fee","Fee Currency","Exchange","Trade-Group","Comment","Date"
+"Trade","0.00238","BTC","100","CHF","1.5","CHF","Relai","","DCA","15.01.2024 09:00:00"
+"Trade","0.00225","BTC","100","CHF","1.5","CHF","Relai","","DCA","15.02.2024 09:00:00"
+"Withdrawal","","","0.001","BTC","","","Relai","","","20.02.2024 10:00:00"

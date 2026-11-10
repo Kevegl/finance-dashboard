@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f9f9f7">
+<title>Portfolio</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar" id="topbar" hidden>
+  <div class="brand">
+    <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <div>
+      <h1 id="title" tabindex="0" role="button" title="Klicken zum Umbenennen">Portfolio</h1>
+      <p class="sub" id="lastUpdate">–</p>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn icon" id="btnRefresh" title="Kurse aktualisieren" aria-label="Kurse aktualisieren">
+      <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="btn icon" id="btnHide" title="Beträge verbergen" aria-label="Beträge verbergen" aria-pressed="false"></button>
+    <button class="btn icon" id="btnSettings" title="Einstellungen" aria-label="Einstellungen">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="btn icon" id="btnTheme" title="Hell/Dunkel" aria-label="Darstellung wechseln">
+      <svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="btn ghost" id="btnAdd">+ Transaktion</button>
+    <button class="btn primary" id="btnImport">
+      <svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Importieren
+    </button>
+  </div>
+</header>
+
+<!-- Anmeldung / Ersteinrichtung -->
+<section class="auth" id="authView" hidden>
+  <form class="auth-card" id="authForm" novalidate>
+    <span class="logo big" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <h2 id="authTitle">Anmelden</h2>
+    <p class="hint" id="authSub"></p>
+    <label class="field">Benutzername<input name="username" autocomplete="username" required></label>
+    <label class="field">Passwort<input name="password" type="password" autocomplete="current-password" required></label>
+    <label class="field" id="authRepeat" hidden>Passwort wiederholen<input name="password2" type="password" autocomplete="new-password"></label>
+    <p class="err" id="authErr" hidden></p>
+    <button class="btn primary wide" id="authSubmit" type="submit">Anmelden</button>
+  </form>
+</section>
+
+<main id="app" hidden>
+<div id="dashView" class="view">
+  <section class="news" id="news" hidden aria-label="Neueste Nachrichten zu deinen Positionen">
+    <span class="news-label">News</span>
+    <div class="news-viewport"><div class="news-track" id="newsTrack"></div></div>
+  </section>
+  <nav class="pf-tabs" id="pfTabs" role="tablist" aria-label="Portfolios"></nav>
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="kpis">
+    <article class="kpi hero">
+      <span class="label">Gesamtwert</span>
+      <span class="value" id="kValue">–</span>
+      <span class="delta" id="kValueDelta"></span>
+      <span class="hint" id="kValuePeak"></span>
+    </article>
+    <article class="kpi">
+      <span class="label">Investiert</span>
+      <span class="value" id="kCost">–</span>
+      <span class="hint" id="kCount"></span>
+    </article>
+    <article class="kpi">
+      <span class="label">Gewinn / Verlust</span>
+      <span class="value" id="kGain">–</span>
+      <span class="delta" id="kGainPct"></span>
+      <span class="hint" id="kGainPeak"></span>
+    </article>
+    <article class="kpi">
+      <span class="label">Erträge netto</span>
+      <span class="value" id="kIncome">–</span>
+      <span class="hint" id="kIncomeHint"></span>
+    </article>
+  </section>
+
+  <section class="grid">
+    <article class="card chart-card">
+      <div class="card-head">
+        <div>
+          <h2>Wertentwicklung</h2>
+          <div class="legend">
+            <span><i class="sw sw-value"></i>Wert</span>
+            <span><i class="sw sw-cost"></i><span id="legCost">Investiert</span></span>
+          </div>
+        </div>
+        <div class="seg" id="rangeSeg" role="tablist">
+          <button data-r="1M">1M</button><button data-r="3M">3M</button><button data-r="6M">6M</button>
+          <button data-r="YTD">YTD</button><button data-r="1Y">1J</button><button data-r="MAX" class="on">Max</button>
+        </div>
+      </div>
+      <div class="chart" id="chart"></div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><h2>Aufteilung</h2></div>
+      <div id="alloc"></div>
+    </article>
+  </section>
+
+  <article class="card">
+    <div class="card-head">
+      <h2>Positionen</h2>
+      <span class="hint">Klick auf eine Position, um Kurs-Ticker oder Namen anzupassen</span>
+    </div>
+    <div class="table-wrap">
+      <table class="table" id="holdings">
+        <thead><tr>
+          <th>Asset</th><th class="num">Menge</th><th class="num">Ø Kaufkurs</th><th class="num">Kurs</th>
+          <th class="num">Wert</th><th class="num">G/V</th><th class="num">Anteil</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="card">
+    <div class="card-head">
+      <h2>Transaktionen</h2>
+      <div class="filters">
+        <input type="search" id="txSearch" placeholder="Suchen…" aria-label="Transaktionen durchsuchen">
+        <select id="txSource" aria-label="Quelle filtern"><option value="">Alle Quellen</option></select>
+        <button class="btn ghost small danger" id="btnDelSource" hidden>Quelle löschen</button>
+        <button class="btn small bulk" id="btnBulkDel" hidden>Ausgewählte löschen</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="table" id="txTable">
+        <thead><tr>
+          <th class="chk"><input type="checkbox" id="txAll" aria-label="Alle Treffer auswählen"></th><th>Datum</th><th>Typ</th><th>Asset</th><th class="num">Menge</th><th class="num">Kurs</th>
+          <th class="num">Gebühr</th><th class="num">Betrag</th><th>Quelle</th><th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <button class="btn ghost more" id="txMore" hidden>Mehr anzeigen</button>
+  </article>
+
+  <section class="empty" id="empty" hidden>
+    <div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <h2>Noch keine Daten</h2>
+    <p>Importiere deinen ersten CSV-Export von Relai, Interactive Brokers oder einem anderen Anbieter.</p>
+    <button class="btn primary" id="btnEmptyImport">CSV importieren</button>
+  </section>
+</div>
+
+<!-- Einstellungen -->
+<div id="settingsView" class="view" hidden>
+  <div class="settings-head">
+    <button class="btn ghost" id="btnBack">← Zurück zum Dashboard</button>
+    <div>
+      <h2>Einstellungen</h2>
+      <p class="hint" id="setActivePf"></p>
+    </div>
+  </div>
+
+  <article class="card settings-card">
+    <h3>Allgemein</h3>
+    <form class="settings-form" id="formGeneral">
+      <label class="field">Titel des Dashboards<input name="title" maxlength="60"></label>
+      <label class="field">Basiswährung<select name="base" id="setBase"></select>
+        <span class="hint">Alle Werte, Gewinne und Summen werden in diese Währung umgerechnet.</span></label>
+      <label class="field">Sprache<select name="lang" id="setLang"><option value="de">Deutsch</option><option value="en">English</option></select></label>
+      <div class="field"><span>Kursaktualisierung</span><div class="readonly" id="setTtl">–</div></div>
+      <label class="check full"><input type="checkbox" name="news" id="setNews"> <span>News-Ticker über dem Portfolio anzeigen</span></label>
+      <div class="form-actions"><button class="btn primary" type="submit">Speichern</button></div>
+    </form>
+  </article>
+
+  <article class="card settings-card">
+    <h3>Portfolios</h3>
+    <p class="hint">Jedes Portfolio ist ein eigenständiges Dashboard mit eigenen Transaktionen. Zwischen den Portfolios wechselst du über die Tabs oben im Dashboard (Doppelklick auf einen Tab = umbenennen).</p>
+    <div class="pf-list" id="pfList"></div>
+    <form class="pf-add" id="formPfAdd">
+      <input name="name" placeholder="Name des neuen Portfolios, z.B. Säule 3a" maxlength="40" aria-label="Name des neuen Portfolios">
+      <button class="btn primary" type="submit">+ Portfolio hinzufügen</button>
+    </form>
+  </article>
+
+  <article class="card settings-card">
+    <h3>Konto &amp; Passwort</h3>
+    <form class="settings-form" id="formAccount" novalidate>
+      <label class="field">Benutzername<input name="username" autocomplete="username" maxlength="40"></label>
+      <label class="field">Aktuelles Passwort<input name="current" type="password" autocomplete="current-password" required></label>
+      <label class="field">Neues Passwort<input name="new" type="password" autocomplete="new-password" placeholder="leer lassen = nicht ändern"></label>
+      <label class="field">Neues Passwort wiederholen<input name="new2" type="password" autocomplete="new-password"></label>
+      <p class="hint full">Mindestens 8 Zeichen. Nach einer Passwortänderung werden alle anderen Geräte abgemeldet.</p>
+      <p class="err full" id="accErr" hidden></p>
+      <div class="form-actions"><button class="btn primary" type="submit">Änderungen speichern</button></div>
+    </form>
+  </article>
+
+  <article class="card settings-card">
+    <h3>Sitzungen</h3>
+    <p class="hint" id="setSessions">–</p>
+    <div class="form-actions left">
+      <button class="btn ghost" id="btnLogoutOthers">Alle anderen Geräte abmelden</button>
+      <button class="btn ghost danger" id="btnLogout">Abmelden</button>
+    </div>
+  </article>
+
+  <article class="card settings-card">
+    <h3>Daten</h3>
+    <p class="hint" id="setData">–</p>
+  </article>
+
+  <article class="card settings-card">
+    <h3>Sicherung &amp; Wiederherstellung</h3>
+    <p class="hint" data-i18n-html="backupInfo">Die Sicherung enthält <b>alle Portfolios</b>, Transaktionen, Ticker-Einstellungen und die gespeicherte Kurshistorie – aber nicht dein Passwort. Bewahre die Datei sicher auf, sie enthält deine Finanzdaten.</p>
+    <div class="form-actions left">
+      <button class="btn primary" id="btnBackup">Sicherung herunterladen</button>
+      <label class="btn ghost" for="restoreFile">Sicherung wiederherstellen …</label>
+      <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+    </div>
+    <p class="hint" data-i18n-html="restoreInfo">Beim Wiederherstellen werden <b>alle aktuellen Daten ersetzt</b>. Nach einer Neuinstallation: Zugang einrichten, dann hier die Sicherung wählen.</p>
+  </article>
+
+  <article class="card settings-card">
+    <h3>Export für Excel &amp; Steuererklärung</h3>
+    <p class="hint" data-i18n-html="exportInfo">Exportiert nur die Transaktionen des <b>gerade offenen Portfolios</b> als CSV-Tabelle (Datum, Typ, Asset, Menge, Kurs, Gebühr, Betrag, Währung, Quelle). Praktisch zum Auswerten in Excel, für die Steuererklärung oder um ein einzelnes Portfolio in ein anderes Portfolio/Dashboard zu übernehmen – die Datei lässt sich über „CSV importieren“ wieder einlesen. Für eine vollständige Sicherung nimm „Sicherung herunterladen“.</p>
+    <div class="form-actions left">
+      <button class="btn ghost" id="btnExport">Transaktionen als CSV exportieren</button>
+      <span class="active-chip" id="exportPf"></span>
+    </div>
+  </article>
+</div>
+</main>
+
+<!-- Import -->
+<dialog id="dlgImport" class="dlg wide">
+  <form method="dialog" class="dlg-head"><h3>Transaktionen importieren</h3><button class="btn icon" aria-label="Schliessen">✕</button></form>
+  <div class="dlg-body">
+    <div class="row">
+      <label class="field grow">Anbieter
+        <select id="impProvider">
+          <option value="auto">Automatisch erkennen</option>
+          <option value="relai">Relai (Bitcoin)</option>
+          <option value="ibkr">Interactive Brokers (Activity Statement / Flex Query)</option>
+          <option value="finpension">Finpension 3a (CSV)</option>
+          <option value="generic">Anderer Anbieter – Spalten zuordnen</option>
+        </select>
+      </label>
+    </div>
+    <label class="drop" id="drop">
+      <input type="file" id="impFile" accept=".csv,.txt,text/csv,.pdf,application/pdf,.zip,application/zip" multiple hidden>
+      <svg viewBox="0 0 24 24"><path d="M12 15V4m0 0L8 8m4-4l4 4M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <strong id="dropText">CSV-, PDF- oder ZIP-Dateien hierher ziehen oder klicken</strong>
+      <span class="hint">PDF-Belege (z.B. VIAC) können gesammelt oder als ZIP gewählt werden. Alles wird nur auf deinem Server verarbeitet.</span>
+    </label>
+    <div id="impMapping" hidden></div>
+    <div id="impResult"></div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn ghost" data-close="dlgImport">Abbrechen</button>
+    <button class="btn primary" id="impCommit" disabled>Importieren</button>
+  </div>
+</dialog>
+
+<!-- Asset bearbeiten -->
+<dialog id="dlgAsset" class="dlg">
+  <form method="dialog" class="dlg-head"><h3 id="assetTitle">Position</h3><button class="btn icon" aria-label="Schliessen">✕</button></form>
+  <div class="dlg-body">
+    <label class="field">Name<input id="aName"></label>
+    <label class="field">Kurs-Ticker (Yahoo Finance)
+      <input id="aTicker" placeholder="z.B. BTC-CHF, VWRA.L, CHSPI.SW">
+      <span class="hint">Börsenkürzel: .SW = SIX, .L = London, .DE = Xetra, .AS = Amsterdam, ohne Endung = USA</span>
+      <span class="hint">Fonds mit ISIN (z.B. 3a-Vorsorgefonds): Der Ticker wird automatisch über die Yahoo-Suche gefunden.</span>
+    </label>
+    <label class="field">Manueller Kurs (optional, überschreibt Live-Kurs)<input id="aManual" type="number" step="any" inputmode="decimal"></label>
+    <label class="field">News-Suchbegriff (optional)<input id="aNews" maxlength="80">
+      <span class="hint">Wonach im News-Ticker gesucht wird, z.B. „Bitcoin“ oder „Vanguard Total World“. Leer = Name der Position.</span></label>
+    <label class="field">Kategorie
+      <select id="aClass"><option value="etf">ETF / Fonds</option><option value="stock">Aktie</option><option value="crypto">Krypto</option><option value="bond">Anleihe</option><option value="cash">Cash</option><option value="other">Andere</option></select>
+    </label>
+    <p class="err" id="aErr" hidden></p>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn ghost" data-close="dlgAsset">Abbrechen</button>
+    <button class="btn primary" id="aSave">Speichern</button>
+  </div>
+</dialog>
+
+<!-- Manuelle Transaktion -->
+<dialog id="dlgTx" class="dlg">
+  <form method="dialog" class="dlg-head"><h3 id="txTitle">Transaktion erfassen</h3><button class="btn icon" aria-label="Schliessen">✕</button></form>
+  <form class="dlg-body form-grid" id="txForm">
+    <label class="field">Datum<input type="date" name="date" required></label>
+    <label class="field">Typ<select name="type"><option value="buy">Kauf</option><option value="sell">Verkauf</option><option value="dividend">Dividende</option><option value="tax">Quellensteuer</option><option value="interest">Zins</option><option value="fee">Gebühr</option><option value="deposit">Einzahlung</option><option value="withdrawal">Auszahlung</option><option value="transfer">Transfer</option></select></label>
+    <label class="field">Asset / Symbol<input name="asset" required placeholder="BTC, VWRA …"></label>
+    <label class="field">Kategorie<select name="asset_class"><option value="etf">ETF / Fonds</option><option value="stock">Aktie</option><option value="crypto">Krypto</option><option value="bond">Anleihe</option><option value="other">Andere</option></select></label>
+    <label class="field">Menge<input type="number" step="any" name="quantity" inputmode="decimal"></label>
+    <label class="field">Kurs<input type="number" step="any" name="price" inputmode="decimal"></label>
+    <label class="field">Gebühr<input type="number" step="any" name="fee" inputmode="decimal" value="0"></label>
+    <label class="field">Betrag total (optional)<input type="number" step="any" name="total" inputmode="decimal"></label>
+    <label class="field">Währung<input name="currency" maxlength="3" placeholder="CHF"></label>
+    <label class="field">Quelle<input name="source" placeholder="Manuell"></label>
+    <label class="field" style="grid-column: 1 / -1">Notiz<input name="note"></label>
+    <input type="hidden" name="id">
+  </form>
+  <div class="dlg-foot">
+    <button class="btn ghost" data-close="dlgTx">Abbrechen</button>
+    <button class="btn primary" id="txSave">Speichern</button>
+  </div>
+</dialog>
+
+<!-- Sicherheitsabfrage -->
+<dialog id="dlgPfNew" class="dlg confirm">
+  <form class="dlg-head" method="dialog"><h3>Neues Portfolio</h3><button class="btn icon" aria-label="Schliessen">✕</button></form>
+  <div class="dlg-body">
+    <label class="field">Name<input id="pfNewName" maxlength="40" placeholder="z.B. Säule 3a"></label>
+    <div class="kind-choice" role="radiogroup" aria-label="Art des Portfolios">
+      <label class="kind-opt"><input type="radio" name="pfKind" value="standard" checked>
+        <span><b>Normales Portfolio</b><small>Aktien, ETFs, Krypto … Gewinn = Wert minus investiertes Kapital.</small></span></label>
+      <label class="kind-opt"><input type="radio" name="pfKind" value="3a">
+        <span><b>Säule 3a / Vorsorgekonto</b><small>Mit Einzahlungen und Kontoguthaben. Zeigt „Selbst einbezahlt“ und „Gewinn seit Beginn“ – Fondswechsel und Transfers sind neutral.</small></span></label>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn ghost" id="pfNewCancel">Abbrechen</button>
+    <button class="btn primary" id="pfNewOk">Anlegen</button>
+  </div>
+</dialog>
+
+<dialog id="dlgConfirm" class="dlg confirm">
+  <div class="dlg-head"><h3 id="cfTitle">Bist du sicher?</h3></div>
+  <div class="dlg-body"><p id="cfText"></p></div>
+  <div class="dlg-foot">
+    <button class="btn ghost" id="cfCancel">Abbrechen</button>
+    <button class="btn danger-solid" id="cfOk">Löschen</button>
+  </div>
+</dialog>
+
+<div class="tooltip" id="tip" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

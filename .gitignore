@@ -1,0 +1,37 @@
+# Persönliche Daten – niemals committen
+data/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.json.bak
+backup*.json
+finance-dashboard-backup*.json
+exports/
+uploads/
+# Eigene CSV/PDF-Exporte (nur beispiel-csv/ ist erlaubt)
+*.csv
+!beispiel-csv/*.csv
+*.pdf
+
+# Konfiguration & Secrets
+.env
+*.env
+!.env.example
+*.pem
+*.key
+*.crt
+tls/
+
+# Build-Artefakte
+*.zip
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
