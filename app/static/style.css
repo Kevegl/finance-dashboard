@@ -315,7 +315,7 @@ select.inline { height: 38px; }
 .settings-head h2 { font-size: 22px; }
 .settings-card { max-width: 820px; width: 100%; }
 .settings-card h3 { font-size: 16px; margin-bottom: 14px; }
-.settings-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.settings-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
 .settings-form .full, .settings-form .form-actions { grid-column: 1 / -1; margin: 0; }
 .form-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .form-actions.left { justify-content: flex-start; margin-top: 4px; }
