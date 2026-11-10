@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+"""Update-Dienst des Finanz-Dashboards (läuft als root über systemd).
+
+  finance-dashboard-update check      -> auf neue Commits prüfen (täglich per Timer)
+  finance-dashboard-update update     -> neue Version holen, installieren, prüfen (bei Fehler zurück)
+  finance-dashboard-update rollback   -> zur Version vor dem letzten Update zurück
+  finance-dashboard-update request    -> Auftrag aus dem Dashboard ausführen (systemd .path-Unit)
+
+Das Dashboard selbst läuft als eingeschränkter Benutzer und kann nur eine Auftragsdatei
+(FD_DATA_DIR/update-request) schreiben. Dieser Dienst liest daraus ausschliesslich die Wörter
+check/update/rollback – alles andere wird verworfen. Status und Log landen in einem
+Verzeichnis, das nur root beschreiben kann.
+"""
+import fcntl
+import json
+import os
+import re
+import socket
+import ssl
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+ENV_FILE = Path(os.environ.get("FD_ENV_FILE", "/etc/finance-dashboard.env"))
+STATE_DIR = Path(os.environ.get("FD_UPDATE_DIR", "/var/lib/finance-dashboard-update"))
+SERVICE = os.environ.get("FD_SERVICE", "finance-dashboard")
+ACTIONS = ("check", "update", "rollback")
+LOG_KEEP = 200          # Zeilen im Status-Log
+HEALTH_WAIT = 45        # Sekunden, die das Dashboard nach dem Update zum Starten hat
+
+
+def now():
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def read_env():
+    env = {}
+    if ENV_FILE.is_file():
+        for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+            m = re.match(r"^\s*([A-Z_][A-Z0-9_]*)=(.*)$", line)
+            if m:
+                env[m.group(1)] = m.group(2).strip().strip('"').strip("'")
+    for k, v in os.environ.items():
+        if k.startswith("FD_") and k != "FD_ENV_FILE":
+            env.setdefault(k, v)
+    return env
+
+
+class Updater:
+    def __init__(self):
+        self.env = read_env()
+        self.repo = self.env.get("FD_REPO_DIR", "")
+        self.data_dir = Path(self.env.get("FD_DATA_DIR", "/var/lib/finance-dashboard"))
+        self.status_file = STATE_DIR / "status.json"
+        self.log_lines = []
+
+    # ---------- Status ----------
+    def load_status(self):
+        try:
+            return json.loads(self.status_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
+    def save_status(self, **fields):
+        st = self.load_status()
+        st.update(fields)
+        st["updated_at"] = now()
+        if self.log_lines:
+            st["log"] = self.log_lines[-LOG_KEEP:]
+        STATE_DIR.mkdir(mode=0o755, parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=STATE_DIR, prefix=".status-")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(st, f, ensure_ascii=False, indent=1)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, self.status_file)
+        return st
+
+    def log(self, msg):
+        line = f"{datetime.now().strftime('%H:%M:%S')} {msg}"
+        self.log_lines.append(line)
+        print(line, flush=True)
+
+    # ---------- Git ----------
+    def git(self, *args, check=True, timeout=120):
+        env = dict(os.environ, GIT_TERMINAL_PROMPT="0", LC_ALL="C",
+                   GIT_SSH_COMMAND="ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20")
+        r = subprocess.run(["git", "-C", self.repo, *args], capture_output=True, text=True, env=env, timeout=timeout)
+        if check and r.returncode != 0:
+            raise RuntimeError(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()}")
+        return r.stdout.strip()
+
+    def commit_info(self, ref):
+        out = self.git("log", "-1", "--format=%H%x1f%h%x1f%cI%x1f%s", ref)
+        full, short, when, subject = out.split("\x1f", 3)
+        return {"commit": full, "short": short, "date": when, "subject": subject}
+
+    def inspect(self, fetch=True):
+        """Vergleicht den installierten Stand mit GitHub und schreibt das Ergebnis in den Status."""
+        if not self.repo or not Path(self.repo, ".git").exists():
+            raise RuntimeError("Kein Git-Repository konfiguriert (FD_REPO_DIR). Installation per git clone nötig.")
+        branch = self.git("rev-parse", "--abbrev-ref", "HEAD")
+        if branch == "HEAD":
+            raise RuntimeError("Das Repository ist auf keinem Branch (detached HEAD).")
+        upstream = self.git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}", check=False)
+        if not upstream:
+            raise RuntimeError(f"Branch '{branch}' hat keinen Upstream (git branch -u origin/{branch}).")
+        if fetch:
+            self.log(f"Prüfe {self.git('remote', 'get-url', 'origin')} ({upstream}) …")
+            self.git("fetch", "--quiet", "--prune", "origin", timeout=180)
+        behind = int(self.git("rev-list", "--count", "HEAD..@{u}"))
+        ahead = int(self.git("rev-list", "--count", "@{u}..HEAD"))
+        dirty = bool(self.git("status", "--porcelain", "--untracked-files=no"))
+        commits = []
+        if behind:
+            for line in self.git("log", "--max-count=50", "--format=%h%x1f%cI%x1f%s", "HEAD..@{u}").splitlines():
+                h, when, subject = line.split("\x1f", 2)
+                commits.append({"short": h, "date": when, "subject": subject})
+        info = {"branch": branch, "upstream": upstream, "current": self.commit_info("HEAD"),
+                "remote": self.commit_info("@{u}"), "behind": behind, "ahead": ahead, "dirty": dirty,
+                "commits": commits, "last_check": now()}
+        return info
+
+    # ---------- Installation ----------
+    def run_install(self):
+        self.log("Installiere (install.sh) …")
+        env = dict(os.environ, FD_UPDATER_RUNNING="1", DEBIAN_FRONTEND="noninteractive")
+        r = subprocess.run(["bash", "install.sh"], cwd=self.repo, capture_output=True, text=True, env=env, timeout=1200)
+        for line in (r.stdout + r.stderr).splitlines():
+            if line.strip():
+                self.log("  " + line.rstrip())
+        if r.returncode != 0:
+            raise RuntimeError(f"install.sh ist fehlgeschlagen (Exit-Code {r.returncode}).")
+
+    def healthy(self):
+        port = int(self.env.get("FD_PORT", "8080"))
+        scheme = "https" if self.env.get("FD_CERT") and self.env.get("FD_KEY") else "http"
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE        # selbstsigniertes Zertifikat, nur lokal
+        deadline = time.time() + HEALTH_WAIT
+        while time.time() < deadline:
+            active = subprocess.run(["systemctl", "is-active", "--quiet", SERVICE]).returncode == 0
+            if active:
+                try:
+                    with urllib.request.urlopen(f"{scheme}://127.0.0.1:{port}/api/health", timeout=5,
+                                                context=ctx if scheme == "https" else None) as r:
+                        if r.status == 200 and json.loads(r.read().decode()).get("ok"):
+                            return True
+                except (OSError, ValueError, socket.timeout):
+                    pass
+            time.sleep(2)
+        return False
+
+    def switch_to(self, target, label):
+        """Setzt das Repo auf target, installiert und prüft. Bei Fehler zurück zum alten Stand."""
+        before = self.git("rev-parse", "HEAD")
+        if label == "update":
+            self.git("merge", "--ff-only", "--quiet", target)
+        else:
+            self.git("reset", "--hard", "--quiet", target)
+        self.log(f"Code-Stand: {before[:7]} → {self.git('rev-parse', '--short', 'HEAD')}")
+        try:
+            self.run_install()
+            self.log("Warte auf das Dashboard …")
+            if not self.healthy():
+                raise RuntimeError("Das Dashboard antwortet nach dem Neustart nicht.")
+        except Exception as e:  # noqa: BLE001
+            self.log(f"✗ {e}")
+            self.log(f"Stelle vorherige Version {before[:7]} wieder her …")
+            self.git("reset", "--hard", "--quiet", before)
+            try:
+                self.run_install()
+                ok = self.healthy()
+            except Exception as e2:  # noqa: BLE001
+                self.log(f"✗ Wiederherstellung: {e2}")
+                ok = False
+            raise RuntimeError(f"{e} Die vorherige Version wurde wiederhergestellt."
+                               if ok else f"{e} Auch die Wiederherstellung ist fehlgeschlagen – bitte im Container prüfen "
+                               f"(journalctl -u {SERVICE}).") from None
+        return before
+
+    # ---------- Aktionen ----------
+    def do_check(self):
+        info = self.inspect()
+        self.log(f"Installiert: {info['current']['short']} · {info['behind']} neue Version(en) verfügbar")
+        return info, ("Neue Version verfügbar." if info["behind"] else "Das Dashboard ist auf dem neuesten Stand.")
+
+    def do_update(self):
+        info = self.inspect()
+        if not info["behind"]:
+            self.log("Bereits auf dem neuesten Stand.")
+            return info, "Das Dashboard ist bereits auf dem neuesten Stand."
+        if info["dirty"]:
+            raise RuntimeError("Im Repository gibt es lokale Änderungen – Update abgebrochen (git status im Container).")
+        if info["ahead"]:
+            raise RuntimeError("Der lokale Stand weicht von GitHub ab (eigene Commits) – Update abgebrochen.")
+        before = self.switch_to("@{u}", "update")
+        info = self.inspect(fetch=False)
+        info["previous"] = self.commit_info(before)
+        info["last_update"] = now()
+        self.log(f"✓ Aktualisiert auf {info['current']['short']}: {info['current']['subject']}")
+        return info, "Update installiert."
+
+    def do_rollback(self):
+        prev = (self.load_status().get("previous") or {}).get("commit")
+        if not prev:
+            raise RuntimeError("Es ist keine vorherige Version gespeichert.")
+        if self.git("cat-file", "-t", prev, check=False) != "commit":
+            raise RuntimeError("Die gespeicherte vorherige Version ist im Repository nicht mehr vorhanden.")
+        if self.git("status", "--porcelain", "--untracked-files=no"):
+            raise RuntimeError("Im Repository gibt es lokale Änderungen – abgebrochen.")
+        self.switch_to(prev, "rollback")
+        info = self.inspect(fetch=False)
+        info["previous"] = None
+        info["last_update"] = now()
+        self.log(f"✓ Zurückgesetzt auf {info['current']['short']}: {info['current']['subject']}")
+        return info, "Vorherige Version wiederhergestellt."
+
+    def run(self, action, request_id=None):
+        self.log_lines = []
+        busy = {"check": "checking", "update": "updating", "rollback": "rolling_back"}[action]
+        self.save_status(state=busy, action=action, request_id=request_id, message="", started_at=now(), log=[])
+        try:
+            info, msg = getattr(self, "do_" + action)()
+            self.save_status(state="ok", message=msg, finished_at=now(), error=None, **info)
+        except Exception as e:  # noqa: BLE001
+            self.log(f"✗ {e}")
+            self.save_status(state="error", message=str(e), error=str(e), finished_at=now())
+            return 1
+        return 0
+
+    def take_request(self):
+        """Liest und entfernt die Auftragsdatei des Dashboards. Gibt (aktion, id) oder None zurück."""
+        req = self.data_dir / "update-request"
+        try:
+            st = os.lstat(req)
+        except FileNotFoundError:
+            return None
+        try:
+            if not (os.path.isfile(req) and not os.path.islink(req)) or st.st_size > 64:
+                return None
+            fd = os.open(req, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(fd, "r", encoding="ascii", errors="replace") as f:
+                raw = f.read(64)
+        except OSError:
+            return None
+        finally:
+            try:
+                os.unlink(req)
+            except OSError:
+                pass
+        m = re.fullmatch(r"\s*(check|update|rollback)(?:\s+([0-9a-f]{8,32}))?\s*", raw)
+        return (m.group(1), m.group(2)) if m else None
+
+
+def main():
+    mode = sys.argv[1] if len(sys.argv) > 1 else "check"
+    if mode not in ACTIONS + ("request",):
+        print(__doc__)
+        return 2
+    if os.geteuid() != 0:
+        print("Bitte als root ausführen.")
+        return 1
+    STATE_DIR.mkdir(mode=0o755, parents=True, exist_ok=True)
+    u = Updater()
+    with open(STATE_DIR / "lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if mode != "request":
+            return u.run(mode)
+        rc = 0
+        for _ in range(5):             # Aufträge abarbeiten, die während eines Laufs dazukommen
+            req = u.take_request()
+            if not req:
+                break
+            rc = u.run(*req)
+        return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -148,9 +148,17 @@ const EN = {
   // Bestätigung
   "Bist du sicher?": "Are you sure?",
   "Löschen": "Delete",
+  // Updates
+  "Installierte Version": "Installed version",
+  "Jetzt aktualisieren": "Update now",
+  "Nach Updates suchen": "Check for updates",
+  "Vorherige Version wiederherstellen": "Restore previous version",
+  "Protokoll des letzten Laufs": "Log of the last run",
 };
 
 const EN_HTML = {
+  updUnavailable: "Updates via the dashboard are only available if it was installed with <code>git clone</code>. See the README for instructions.",
+  updHint: "The dashboard checks for a new version automatically every day. Nothing is installed until you click “Update now”. Your data stays unchanged; if the dashboard does not start after the update, the previous version is restored automatically.",
   backupInfo: "The backup contains <b>all portfolios</b>, transactions, ticker settings and the stored price history – but not your password. Keep the file safe, it contains your financial data.",
   restoreInfo: "Restoring <b>replaces all current data</b>. After a reinstall: set up your login, then choose the backup here.",
   exportInfo: "Exports only the transactions of the <b>currently open portfolio</b> as a CSV table (date, type, asset, quantity, price, fee, amount, currency, source). Handy for analysis in Excel, your tax return, or to move a single portfolio into another portfolio/dashboard – the file can be read back via “Import CSV”. For a complete backup use “Download backup”.",
@@ -158,6 +166,12 @@ const EN_HTML = {
 
 /* Fehlermeldungen des Servers */
 const EN_ERR = {
+  "Unbekannte Aktion": "Unknown action",
+  "Updates über das Dashboard sind bei dieser Installation nicht verfügbar.": "Updates via the dashboard are not available for this installation.",
+  "Der letzte Lauf wurde unterbrochen.": "The last run was interrupted.",
+  "Es ist keine vorherige Version gespeichert.": "No previous version is stored.",
+  "Im Repository gibt es lokale Änderungen – Update abgebrochen (git status im Container).": "The repository has local changes – update cancelled (run git status in the container).",
+  "Der lokale Stand weicht von GitHub ab (eigene Commits) – Update abgebrochen.": "The local state differs from GitHub (own commits) – update cancelled.",
   "Keine PDF- oder CSV-Dateien gefunden": "No PDF or CSV files found",
   "PDF-Import nicht verfügbar: pdftotext fehlt (install.sh erneut ausführen)": "PDF import unavailable: pdftotext missing (run install.sh again)",
   "Benutzername oder Passwort falsch.": "Wrong username or password.",

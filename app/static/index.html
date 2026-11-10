@@ -22,7 +22,8 @@
       <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <button class="btn icon" id="btnHide" title="Beträge verbergen" aria-label="Beträge verbergen" aria-pressed="false"></button>
-    <button class="btn icon" id="btnSettings" title="Einstellungen" aria-label="Einstellungen">
+    <button class="btn icon has-dot" id="btnSettings" title="Einstellungen" aria-label="Einstellungen">
+      <span class="dot" id="updDot" hidden></span>
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
     </button>
     <button class="btn icon" id="btnTheme" title="Hell/Dunkel" aria-label="Darstellung wechseln">
@@ -212,6 +213,25 @@
   <article class="card settings-card">
     <h3>Daten</h3>
     <p class="hint" id="setData">–</p>
+  </article>
+
+  <article class="card settings-card" id="updCard">
+    <h3>Updates</h3>
+    <p class="hint" id="updUnavailable" hidden data-i18n-html="updUnavailable">Updates über das Dashboard sind nur verfügbar, wenn es per <code>git clone</code> installiert wurde. Anleitung siehe README.</p>
+    <div id="updBody" hidden>
+      <div class="upd-grid">
+        <div class="field"><span>Installierte Version</span><div class="readonly" id="updCurrent">–</div></div>
+        <div class="field"><span>Status</span><div class="readonly" id="updState">–</div></div>
+      </div>
+      <ul class="upd-commits" id="updCommits" hidden></ul>
+      <p class="hint" id="updHint" data-i18n-html="updHint">Täglich wird automatisch geprüft, ob es eine neue Version gibt. Installiert wird nur, wenn du auf „Jetzt aktualisieren“ klickst. Deine Daten bleiben dabei unverändert; startet das Dashboard nach dem Update nicht, wird automatisch die vorherige Version wiederhergestellt.</p>
+      <div class="form-actions left">
+        <button class="btn primary" id="btnUpdInstall" hidden>Jetzt aktualisieren</button>
+        <button class="btn ghost" id="btnUpdCheck">Nach Updates suchen</button>
+        <button class="btn ghost" id="btnUpdRollback" hidden>Vorherige Version wiederherstellen</button>
+      </div>
+      <details id="updLogBox" hidden><summary>Protokoll des letzten Laufs</summary><pre class="upd-log" id="updLog"></pre></details>
+    </div>
   </article>
 
   <article class="card settings-card">

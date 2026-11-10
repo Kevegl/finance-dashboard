@@ -16,7 +16,7 @@ SRC="$(cd "$(dirname "$0")" && pwd)"
 
 echo "→ Pakete installieren"
 apt-get update -qq
-apt-get install -y -qq python3 ca-certificates tzdata openssl poppler-utils >/dev/null
+apt-get install -y -qq python3 ca-certificates tzdata openssl poppler-utils git >/dev/null
 
 echo "→ Benutzer und Verzeichnisse anlegen"
 id finance >/dev/null 2>&1 || useradd --system --home "$DEST" --shell /usr/sbin/nologin finance
@@ -64,14 +64,79 @@ UNIT
 has FD_CERT || echo "FD_CERT=$TLS_DIR/cert.pem" >> "$ENV"
 has FD_KEY  || echo "FD_KEY=$TLS_DIR/key.pem" >> "$ENV"
 
+# --- Updates über das Dashboard (Einstellungen → Updates), nur bei Installation per git clone
+install -m 755 "$SRC/finance-dashboard-update" /usr/local/sbin/finance-dashboard-update
+mkdir -p /var/lib/finance-dashboard-update && chown root:root /var/lib/finance-dashboard-update && chmod 755 /var/lib/finance-dashboard-update
+sed -i '/^FD_REPO_DIR=/d' "$ENV"
+if git -C "$SRC" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "→ Update-Dienst einrichten (Repository: $SRC)"
+  echo "FD_REPO_DIR=$SRC" >> "$ENV"
+  cat > /etc/systemd/system/finance-dashboard-update.service <<UNIT
+[Unit]
+Description=Finanz-Dashboard: Update-Auftrag aus dem Dashboard ausführen
+
+[Service]
+Type=oneshot
+Environment=HOME=/root
+ExecStart=/usr/local/sbin/finance-dashboard-update request
+TimeoutStartSec=30min
+UNIT
+  cat > /etc/systemd/system/finance-dashboard-update.path <<UNIT
+[Unit]
+Description=Finanz-Dashboard: auf Update-Aufträge aus dem Dashboard warten
+
+[Path]
+PathExists=/var/lib/finance-dashboard/update-request
+Unit=finance-dashboard-update.service
+
+[Install]
+WantedBy=paths.target
+UNIT
+  cat > /etc/systemd/system/finance-dashboard-update-check.service <<UNIT
+[Unit]
+Description=Finanz-Dashboard: auf neue Version prüfen
+
+[Service]
+Type=oneshot
+Environment=HOME=/root
+ExecStart=/usr/local/sbin/finance-dashboard-update check
+TimeoutStartSec=10min
+UNIT
+  cat > /etc/systemd/system/finance-dashboard-update-check.timer <<UNIT
+[Unit]
+Description=Finanz-Dashboard: täglich auf neue Version prüfen
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=2h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+  UPDATER=1
+else
+  echo "→ Kein Git-Repository – Updates über das Dashboard bleiben deaktiviert (Installation per git clone, siehe README)"
+  systemctl disable --now finance-dashboard-update.path finance-dashboard-update-check.timer >/dev/null 2>&1 || true
+  UPDATER=0
+fi
+
 echo "→ systemd-Dienst einrichten"
 cp "$SRC/finance-dashboard.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable finance-dashboard >/dev/null 2>&1
 systemctl enable --now finance-dashboard-cert.timer >/dev/null 2>&1
+if [ "$UPDATER" = 1 ]; then
+  systemctl enable --now finance-dashboard-update.path finance-dashboard-update-check.timer >/dev/null 2>&1
+fi
 systemctl restart finance-dashboard
 sleep 1
 systemctl is-active --quiet finance-dashboard || { echo "✗ Dienst läuft nicht:"; journalctl -u finance-dashboard -n 20 --no-pager; exit 1; }
+
+# Gleich einmal auf Updates prüfen, damit die Einstellungen einen Stand anzeigen (nicht während eines Updates)
+if [ "$UPDATER" = 1 ] && [ -z "${FD_UPDATER_RUNNING:-}" ]; then
+  systemctl start --no-block finance-dashboard-update-check.service || true
+fi
 
 PORT_NOW=$(grep -E '^FD_PORT=' "$ENV" | cut -d= -f2)
 echo

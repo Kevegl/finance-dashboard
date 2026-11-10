@@ -825,6 +825,7 @@ function showApp() {
   $("#authView").hidden = true; $("#topbar").hidden = false; $("#app").hidden = false;
   applyRoute();
   load().catch((e) => toast(L("Laden fehlgeschlagen: ", "Loading failed: ") + e.message, 6000));
+  loadUpdate();
 }
 $("#authForm").onsubmit = async (e) => {
   e.preventDefault();
@@ -868,6 +869,7 @@ async function loadSettings() {
     a.elements.username.value = s.user || "";
     $("#setSessions").textContent = L(`${s.sessions} aktive ${s.sessions === 1 ? "Sitzung" : "Sitzungen"} (angemeldete Browser/Geräte). Sitzungen laufen nach 30 Tagen ab.`,
       `${s.sessions} active ${s.sessions === 1 ? "session" : "sessions"} (signed-in browsers/devices). Sessions expire after 30 days.`);
+    loadUpdate(true).then(() => { if (updWaiting() || (upd.st && upd.st.busy)) { upd.since = upd.since || Date.now(); updPoll(); } });
     $("#setData").textContent = L(`${s.transactions} Transaktionen gespeichert · Verbindung ${s.https ? "verschlüsselt (HTTPS)" : "unverschlüsselt (HTTP)"}.`,
       `${s.transactions} transactions stored · connection ${s.https ? "encrypted (HTTPS)" : "unencrypted (HTTP)"}.`);
   } catch (e) { toast(e.message); }
@@ -1093,6 +1095,97 @@ $("#restoreFile").onchange = async (e) => {
     toast(L(`Wiederhergestellt: ${r.portfolios} Portfolios, ${r.transactions} Transaktionen`, `Restored: ${r.portfolios} portfolios, ${r.transactions} transactions`), 5000);
     await load(); loadSettings();
   } catch (ex) { toast(ex.message, 6000); }
+};
+
+/* ---------- Updates ---------- */
+const upd = { st: null, rid: null, action: null, timer: null, fails: 0, since: 0 };
+const updDate = (iso) => (iso ? new Date(iso).toLocaleString(LOCALE, { dateStyle: "medium", timeStyle: "short" }) : "–");
+async function loadUpdate(withLog = false) {
+  try {
+    const st = await api("/api/update/status" + (withLog ? "?log=1" : ""));
+    upd.st = st; upd.fails = 0;
+    renderUpdate();
+    return st;
+  } catch (e) { upd.fails++; return null; }
+}
+function updWaiting() {
+  const st = upd.st;
+  if (!upd.rid) return false;
+  return !st || st.pending || st.busy || st.request_id !== upd.rid;
+}
+function renderUpdate() {
+  const st = upd.st || {};
+  $("#updDot").hidden = !(st.available && st.behind > 0);
+  if (!$("#settingsView") || $("#settingsView").hidden) return;
+  $("#updUnavailable").hidden = st.available !== false;
+  $("#updBody").hidden = !st.available;
+  if (!st.available) return;
+  const cur = st.current;
+  $("#updCurrent").innerHTML = cur
+    ? `<code>${esc(cur.short)}</code> ${esc(cur.subject)}<small>${esc(updDate(cur.date))}${st.branch ? " · " + esc(st.branch) : ""}</small>`
+    : "–";
+  const waiting = updWaiting(), busy = waiting || st.busy;
+  const busyText = { check: L("Suche nach Updates …", "Checking for updates …"), update: L("Update wird installiert – das Dashboard startet gleich neu …", "Installing update – the dashboard will restart shortly …"),
+    rollback: L("Vorherige Version wird wiederhergestellt …", "Restoring previous version …") }[upd.action || st.action] || L("Bitte warten …", "Please wait …");
+  let html, cls = "";
+  if (busy) html = `<span class="spin"></span>${esc(busyText)}`;
+  else if (st.state === "error") { cls = "err"; html = esc(L("Fehler: ", "Error: ") + trErr(st.message || "")); }
+  else if (st.behind > 0) { cls = "new"; html = esc(L(`${st.behind} ${st.behind === 1 ? "neue Version" : "neue Versionen"} verfügbar`, `${st.behind} new ${st.behind === 1 ? "version" : "versions"} available`)); }
+  else if (st.current) { cls = "ok"; html = esc(L("Auf dem neuesten Stand", "Up to date")); }
+  else html = esc(L("Noch nicht geprüft", "Not checked yet"));
+  if (!busy && st.last_check) html += `<small>${esc(L("Zuletzt geprüft: ", "Last checked: ") + updDate(st.last_check))}</small>`;
+  const el = $("#updState"); el.innerHTML = html; el.className = "readonly upd-state " + cls;
+  const commits = st.behind > 0 ? (st.commits || []) : [];
+  $("#updCommits").hidden = !commits.length;
+  $("#updCommits").innerHTML = commits.map((c) => `<li>${esc(c.subject)} <small>${esc(updDate(c.date))} · <code>${esc(c.short)}</code></small></li>`).join("");
+  $("#btnUpdInstall").hidden = !(st.behind > 0);
+  $("#btnUpdInstall").disabled = busy || st.dirty || st.ahead > 0;
+  $("#btnUpdCheck").disabled = busy;
+  $("#btnUpdRollback").hidden = !st.previous;
+  $("#btnUpdRollback").disabled = busy;
+  if (st.previous) $("#btnUpdRollback").title = `${st.previous.short} · ${st.previous.subject}`;
+  const log = st.log || [];
+  $("#updLogBox").hidden = !log.length || busy;
+  $("#updLog").textContent = log.join("\n");
+  if (st.state === "error" && log.length) $("#updLogBox").open = true;
+}
+async function updPoll() {
+  clearTimeout(upd.timer);
+  await loadUpdate(true);
+  // Während eines Updates ist der Server kurz weg – einfach weiter versuchen (max. 30 Min.)
+  if ((updWaiting() || (upd.st && upd.st.busy)) && Date.now() - upd.since < 30 * 60e3) { upd.timer = setTimeout(updPoll, 2000); return; }
+  if (!upd.rid) return;
+  const st = upd.st || {}, action = upd.action;
+  upd.rid = null; upd.action = null;
+  renderUpdate();
+  if (st.state === "error") return toast(trErr(st.message || "") || L("Fehlgeschlagen", "Failed"), 8000);
+  if (action === "check") return toast(st.behind > 0 ? L("Neue Version verfügbar", "New version available") : L("Das Dashboard ist auf dem neuesten Stand", "The dashboard is up to date"));
+  toast(action === "update" ? L("Update installiert – Seite wird neu geladen …", "Update installed – reloading …") : L("Vorherige Version wiederhergestellt – Seite wird neu geladen …", "Previous version restored – reloading …"), 4000);
+  setTimeout(() => location.reload(), 1500);
+}
+async function updRequest(action) {
+  try {
+    const r = await api("/api/update/request", { method: "POST", body: { action } });
+    upd.rid = r.request_id; upd.action = action; upd.since = Date.now();
+    renderUpdate();
+    upd.timer = setTimeout(updPoll, 1200);
+  } catch (e) { toast(e.message, 6000); }
+}
+$("#btnUpdCheck").onclick = () => updRequest("check");
+$("#btnUpdInstall").onclick = async () => {
+  const st = upd.st || {};
+  if (!(await confirmDialog(L("Update jetzt installieren?", "Install update now?"),
+    L(`${st.behind} neue ${st.behind === 1 ? "Version" : "Versionen"}. Das Dashboard ist während des Updates kurz nicht erreichbar (meist unter einer Minute). Deine Daten bleiben unverändert.`,
+      `${st.behind} new ${st.behind === 1 ? "version" : "versions"}. The dashboard will be briefly unavailable during the update (usually under a minute). Your data stays unchanged.`),
+    L("Aktualisieren", "Update")))) return;
+  updRequest("update");
+};
+$("#btnUpdRollback").onclick = async () => {
+  const p = (upd.st || {}).previous || {};
+  if (!(await confirmDialog(L("Vorherige Version wiederherstellen?", "Restore previous version?"),
+    L(`Zurück zu ${p.short}: ${p.subject}. Deine Daten bleiben unverändert.`, `Back to ${p.short}: ${p.subject}. Your data stays unchanged.`),
+    L("Wiederherstellen", "Restore")))) return;
+  updRequest("rollback");
 };
 
 /* ---------- Start ---------- */

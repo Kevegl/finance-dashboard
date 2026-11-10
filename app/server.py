@@ -10,6 +10,7 @@ Umgebungsvariablen:
   Passwort vergessen:  python3 server.py --reset-password
   FD_CERT/FD_KEY                        – Pfad zu TLS-Zertifikat/Schlüssel -> HTTPS
   FD_PRICE_TTL   (Standard 14400 s)     – wie oft Kurse automatisch aktualisiert werden
+  FD_REPO_DIR                           – Git-Repository der Installation (setzt install.sh) -> Updates im Dashboard
 """
 import hashlib
 import csv
@@ -67,6 +68,11 @@ FAILED = {}            # IP -> [Zeitpunkte fehlgeschlagener Anmeldungen]
 FAILED_LOCK = threading.Lock()
 MAX_FAILS, FAIL_WINDOW = 5, 900   # 5 Fehlversuche in 15 Min. -> 15 Min. gesperrt
 PRICE_TTL = int(os.environ.get("FD_PRICE_TTL", "14400"))
+# Updates über das Dashboard: der Server schreibt nur eine Auftragsdatei, ausgeführt wird sie vom
+# root-Dienst finance-dashboard-update (systemd .path-Unit). Status liest er aus dessen Verzeichnis.
+REPO_DIR = os.environ.get("FD_REPO_DIR", "")
+UPDATE_STATUS = Path(os.environ.get("FD_UPDATE_STATUS", "/var/lib/finance-dashboard-update/status.json"))
+UPDATE_ACTIONS = ("check", "update", "rollback")
 MAX_BODY = 100 * 1024 * 1024
 
 DB_LOCK = threading.RLock()
@@ -1138,6 +1144,42 @@ def parse_uploaded_files(files):
 # HTTP
 # --------------------------------------------------------------------------
 
+def update_status():
+    """Stand des Update-Dienstes für die Einstellungen (ohne Log, das gibt es separat)."""
+    if not REPO_DIR:
+        return {"available": False}
+    try:
+        st = json.loads(UPDATE_STATUS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        st = {}
+    st["available"] = True
+    st["pending"] = (DATA_DIR / "update-request").exists()
+    st["busy"] = st.get("state") in ("checking", "updating", "rolling_back")
+    if st.get("updated_at") and st["busy"]:
+        # Ein Lauf, der seit über 40 Minuten "läuft", ist abgebrochen (z.B. Container-Neustart)
+        try:
+            age = time.time() - datetime.fromisoformat(st["updated_at"]).timestamp()
+            if age > 2400:
+                st["busy"] = False
+                st["state"] = "error"
+                st["message"] = "Der letzte Lauf wurde unterbrochen."
+        except ValueError:
+            pass
+    return st
+
+
+def request_update(action):
+    if action not in UPDATE_ACTIONS:
+        raise ValueError("Unbekannte Aktion")
+    if not REPO_DIR:
+        raise ValueError("Updates über das Dashboard sind bei dieser Installation nicht verfügbar.")
+    rid = secrets.token_hex(8)
+    tmp = DATA_DIR / f".update-request-{rid}"
+    tmp.write_text(f"{action} {rid}\n", encoding="ascii")
+    os.replace(tmp, DATA_DIR / "update-request")
+    return rid
+
+
 MIME = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
         ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
         ".ico": "image/x-icon", ".json": "application/json", ".webmanifest": "application/manifest+json"}
@@ -1303,6 +1345,11 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, {"items": [], "enabled": False})
                 force = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("force") == ["1"]
                 return self._send(200, {"items": portfolio_news(self._pid(), get_lang(), force), "enabled": True})
+            if path == "/api/update/status":
+                st = update_status()
+                if urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("log") != ["1"]:
+                    st.pop("log", None)
+                return self._send(200, st)
             if path == "/api/export.csv":
                 return self._export_csv(self._pid())
             if path == "/api/portfolios":
@@ -1425,6 +1472,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"deleted": n})
             if path == "/api/refresh":
                 return self._send(200, refresh_prices(force=True))
+            if path == "/api/update/request":
+                return self._send(200, {"ok": True, "request_id": request_update(body.get("action"))})
             return self._send(404, {"error": "nicht gefunden"})
         except importers.ImportErrorDetail as e:
             return self._send(422, {"error": str(e)})
