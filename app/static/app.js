@@ -791,14 +791,14 @@ $("#btnDelSource").onclick = async () => {
   $("#txSource").value = ""; toast(L(`${r.deleted} Transaktionen gelöscht`, `${r.deleted} transactions deleted`)); load();
 };
 $("#btnRefresh").onclick = async () => {
-  const b = $("#btnRefresh"); b.classList.add("spin"); b.disabled = true;
+  const b = $("#btnRefresh"); b.classList.add("loading"); b.disabled = true;
   try {
     const r = await api("/api/refresh", { method: "POST" });
     const n = Object.keys(r.errors || {}).length;
     toast(n ? L(`Kurse aktualisiert – ${n} Ticker fehlgeschlagen`, `Prices updated – ${n} tickers failed`) : L("Kurse aktualisiert", "Prices updated"));
     await load();
   } catch (e) { toast(e.message); }
-  b.classList.remove("spin"); b.disabled = false;
+  b.classList.remove("loading"); b.disabled = false;
 };
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => state.summary && renderChart(), 120); });
 
