@@ -42,3 +42,9 @@ Sprache im Projekt: Deutsch (Schweizer Schreibweise, „ss“ statt „ß“), U
   Importe mit den Dateien aus `beispiel-csv/` prüfen.
 - `python3 -m py_compile app/*.py finance-dashboard-update`, `node --check app/static/*.js`, `bash -n install.sh`.
 - Bei UI-Änderungen einen Screenshot (hell/dunkel, Desktop/Handy) ansehen; README bei neuen Funktionen ergänzen.
+
+## Arbeitsteilung (Projektleiter und Arbeiter)
+- Die Hauptsitzung (Opus) ist der Projektleiter: Sie plant, zerlegt Aufgaben, delegiert, prüft die Ergebnisse und ist allein für Commit und Push zuständig.
+- Arbeiter sind Subagenten mit Sonnet 5.5, definiert in `.claude/agents/`: `umsetzer` (Code schreiben) und `tester` (Tests nach dem Abschnitt «Testen vor dem Push»).
+- Kleine Änderungen macht der Projektleiter direkt; Subagenten lohnen sich erst bei grösseren Umbauten oder mehreren unabhängigen Teilaufgaben.
+- Vor jedem Commit prüft der Projektleiter den Diff selbst (Datenschutz-Abschnitt), auch wenn der `tester` gemeldet hat, alles sei in Ordnung.
