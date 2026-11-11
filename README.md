@@ -110,6 +110,10 @@ Der Container braucht dafür Internetzugang zu `query1.finance.yahoo.com`.
   gehaltenen Positionen des geöffneten Portfolios. Der Server holt die Meldungen und speichert sie 30 Minuten zwischen;
   der Browser verbindet sich nicht direkt mit Google. Abschaltbar in den Einstellungen.
 - Suchbegriff pro Position anpassbar: Position anklicken → *News-Suchbegriff* (leer = Name der Position).
+- **Säule 3a:** Vorsorgefonds stehen nie in Schlagzeilen. In 3a-Portfolios ordnet der Ticker die Fonds deshalb ihrem
+  Markt zu (z. B. SMI, Weltbörsen, Wall Street, Schwellenländer, Immobilien Schweiz, SNB-Zinsen, Gold) und zeigt
+  zusätzlich Meldungen zum Anbieter (VIAC, Finpension) und zur Säule 3a allgemein. Ein eigener News-Suchbegriff
+  einer Position hat Vorrang.
 
 ## Lokal testen
 ```bash
