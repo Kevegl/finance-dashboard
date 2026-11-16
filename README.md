@@ -29,8 +29,8 @@ Importiert CSV-Exporte von **Relai** (Bitcoin) und **Interactive Brokers** (ETFs
 
 <table>
   <tr>
-    <td width="62%"><img src="docs/screenshots/import.png" alt="Import mit automatischer Erkennung und Vorschau"></td>
-    <td><img src="docs/screenshots/handy.png" alt="Dashboard auf dem Handy im dunklen Modus"></td>
+    <td width="62%" valign="top"><img src="docs/screenshots/import.png" alt="Import mit automatischer Erkennung und Vorschau"></td>
+    <td valign="top"><img src="docs/screenshots/handy.png" alt="Dashboard auf dem Handy im dunklen Modus"></td>
   </tr>
   <tr>
     <td><b>Import:</b> Anbieter wird erkannt, Vorschau vor dem Speichern, Duplikate werden übersprungen.</td>
