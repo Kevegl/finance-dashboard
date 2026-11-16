@@ -123,6 +123,11 @@ def main():
         assert call("/api/settings")["local"] is None
         assert call("/api/update/status") == {"available": False}
         call("/api/local/quit", {}, expect=404)       # im Server-Modus darf sich nichts beenden lassen
+        # Benutzername mit Umlauten (Anmeldung, Gross-/Kleinschreibung egal), danach zurück auf «test»
+        call("/api/account/password", {"current": "testtest123", "username": "Jürg Müller"})
+        call("/api/logout", {})
+        call("/api/login", {"username": "jürg müller", "password": "testtest123"})
+        call("/api/account/password", {"current": "testtest123", "username": "test"})
 
         total = 0
         for f in sorted((ROOT / "beispiel-csv").glob("*.csv")):

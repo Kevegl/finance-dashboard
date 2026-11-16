@@ -370,7 +370,7 @@ def totp_code(secret, step):
 def totp_match(secret, code, last_step=-1):
     """Gibt den passenden Zeitschritt zurück (Fenster ±1, nur neuer als last_step) oder None."""
     code = re.sub(r"\s", "", str(code or ""))
-    if not secret or not re.fullmatch(r"\d{6}", code):
+    if not secret or not re.fullmatch(r"[0-9]{6}", code):   # nur ASCII-Ziffern (compare_digest)
         return None
     now, found = int(time.time() // 30), None
     for step in (now - 1, now, now + 1):
@@ -1772,7 +1772,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._log("login_blocked")
                 return self._send(429, {"error": "Zu viele Fehlversuche – bitte 15 Minuten warten."})
             user = (body.get("username") or "").strip()
-            ok = auth_configured() and hmac.compare_digest(user.lower(), (get_setting("auth_user") or "").lower()) \
+            ok = auth_configured() and hmac.compare_digest(user.lower().encode(), (get_setting("auth_user") or "").lower().encode()) \
                 and verify_pw(body.get("password") or "", get_setting("auth_hash"))
             if not ok:
                 self._register_fail()
