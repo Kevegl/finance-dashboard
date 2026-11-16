@@ -3,6 +3,21 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.0.4
+
+### Behoben
+- Windows: «GitHub nicht erreichbar: Das Zertifikat konnte nicht geprüft werden» trotz automatischer Ergänzung.
+  Windows ergänzte das fehlende Stammzertifikat zwar, das Dashboard las seine Zertifikatsliste aber erst beim
+  nächsten Programmstart neu ein. Jetzt geschieht das sofort. Zusätzlich werden die von Windows automatisch
+  nachgeladenen Stammzertifikate (Speicher «Drittanbieter-Stammzertifizierungsstellen») direkt berücksichtigt.
+  Das betrifft auch Kurse, News und Steuerfüsse.
+
+**Update unter Windows, falls die Zertifikatsmeldung erscheint:** einmal https://api.github.com in Edge öffnen,
+das Dashboard über das Statusfenster *Beenden* und neu starten, dann *Einstellungen → Updates → Jetzt
+aktualisieren*. Ab 1.0.4 ist das nicht mehr nötig.
+
+*English:* Windows: fixes “certificate could not be verified” right after Windows added a missing root certificate.
+
 ## 1.0.3
 
 ### Neu

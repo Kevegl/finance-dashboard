@@ -26,6 +26,8 @@ jobs:
           bash -n install.sh start.sh start.command finance-dashboard-cert.sh
       - name: Server-Modus mit Beispiel-CSV
         run: python tests/smoke_server.py
+      - name: Windows-Zertifikate neu einlesen (Regressionstest)
+        run: python tests/cert_refresh.py
       - name: QR-Code-Generator (Rundlauf mit OpenCV, nur zum Testen installiert)
         run: |
           python -m pip install --quiet opencv-python-headless numpy
@@ -55,6 +57,7 @@ jobs:
         run: |
           python - <<'PY'
           import local_update as lu
+          print("Zertifikate im Kontext (inkl. AuthRoot):", lu.https_context().cert_store_stats())
           lu.warm_windows_certs("https://api.github.com/")
           try:
               r = lu.fetch_releases()

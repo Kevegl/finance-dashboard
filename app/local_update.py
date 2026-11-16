@@ -142,7 +142,28 @@ def version_info(version, date=None, subject=None):
 
 CERT_HINT = ("Das Zertifikat konnte nicht geprüft werden (Windows-Zertifikatsspeicher unvollständig). "
              "Bitte Windows Update ausführen oder die Seite einmal in Edge öffnen.")
-_WARMED = set()
+_WARMED = {}           # Adresse -> Zeitpunkt der letzten Ergänzung durch Windows
+_CTX = {"ctx": None}   # gemeinsamer TLS-Kontext (Zertifikatsliste), wird nach einer Ergänzung neu eingelesen
+
+
+def https_context(fresh=False):
+    """TLS-Kontext mit den Stammzertifikaten des Systems. Unter Windows zusätzlich der Speicher «AuthRoot»
+    (Drittanbieter-Stammzertifizierungsstellen), in den Windows automatisch nachgeladene Zertifikate legt.
+    Python liest die Zertifikate nur beim Erstellen des Kontexts – darum nach einer Ergänzung fresh=True."""
+    if _CTX["ctx"] is None or fresh:
+        ctx = ssl.create_default_context()
+        if sys.platform.startswith("win"):
+            try:
+                for cert, enc, trust in ssl.enum_certificates("AuthRoot"):
+                    if enc == "x509_asn" and (trust is True or ssl.Purpose.SERVER_AUTH.oid in trust):
+                        try:
+                            ctx.load_verify_locations(cadata=cert)
+                        except (ssl.SSLError, ValueError):
+                            pass
+            except (AttributeError, OSError, ssl.SSLError):
+                pass
+        _CTX["ctx"] = ctx
+    return _CTX["ctx"]
 
 
 def is_cert_error(e):
@@ -171,18 +192,19 @@ def warm_windows_certs(url):
 def urlopen(req, timeout=30):
     """urllib.request.urlopen; unter Windows bei fehlendem Stammzertifikat einmal pro Adresse ergänzen und wiederholen."""
     try:
-        return urllib.request.urlopen(req, timeout=timeout)  # noqa: S310
+        return urllib.request.urlopen(req, timeout=timeout, context=https_context())  # noqa: S310
     except urllib.error.URLError as e:
         if not (sys.platform.startswith("win") and is_cert_error(e)):
             raise
         url = req.full_url if isinstance(req, urllib.request.Request) else str(req)
         host = urllib.parse.urlsplit(url).hostname or ""
-        if host in _WARMED:
+        if time.time() - _WARMED.get(host, 0) < 600:    # höchstens alle 10 Minuten pro Adresse
             raise
-        _WARMED.add(host)
+        _WARMED[host] = time.time()
         print(f"Zertifikat für {host} fehlt im Windows-Speicher – lasse Windows es ergänzen …", flush=True)
         warm_windows_certs(url)
-        return urllib.request.urlopen(req, timeout=timeout)  # noqa: S310
+        # Zertifikatsliste neu einlesen – sonst würde die Wiederholung mit dem alten Stand scheitern
+        return urllib.request.urlopen(req, timeout=timeout, context=https_context(fresh=True))  # noqa: S310
 
 
 # ---------------------------------------------------------------- GitHub Releases
