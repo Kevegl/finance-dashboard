@@ -16,6 +16,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -75,6 +76,17 @@ def main():
         assert proc.poll() is None, "erste Instanz wurde beendet"
         print("✓ zweiter Start erkennt die laufende Instanz", flush=True)
 
+        # Versionswechsel: Startprogramm hat das Ergebnis noch nicht eingetragen -> weiter «läuft», nicht «unterbrochen»
+        status_file = Path(data) / "local" / "status.json"
+        status_file.parent.mkdir(parents=True, exist_ok=True)
+        for age, busy in ((5, True), (600, False)):
+            ts = datetime.fromtimestamp(time.time() - age, timezone.utc).isoformat(timespec="seconds")
+            status_file.write_text(json.dumps({"state": "updating", "action": "update", "updated_at": ts}), encoding="utf-8")
+            st = call("/api/update/status")
+            assert st["busy"] is busy and (busy or "unterbrochen" in st["message"]), (age, st)
+        status_file.unlink()
+        print("✓ Statusanzeige während des Versionswechsels", flush=True)
+
         assert call("/api/local/quit", {})["ok"]
         code = proc.wait(timeout=30)
         assert code == 0, f"Exit-Code nach «Beenden»: {code}"
@@ -86,8 +98,12 @@ def main():
         assert (Path(data) / "finance.db").is_file(), "Datenbank fehlt im Datenordner"
         print("✓ «Dashboard beenden» – alles beendet, Daten im Datenordner", flush=True)
     finally:
-        if proc.poll() is None:
-            proc.kill()
+        if proc.poll() is None:          # bei einem Fehler: Dashboard samt Server-Prozess regulär beenden
+            try:
+                call("/api/local/quit", {}, timeout=3)
+                proc.wait(15)
+            except Exception:  # noqa: BLE001
+                proc.kill()
     print("SMOKE-TEST OK")
 
 

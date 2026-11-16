@@ -1536,9 +1536,15 @@ def local_update_status():
     st = local_update.read_status(DATA_DIR)
     busy = st.get("state") in ("checking", "updating", "rolling_back")
     if busy and not local_update_busy():
-        # Nach einem Neustart läuft hier kein Vorgang mehr -> unterbrochen
-        busy = False
-        st.update(state="error", message="Der letzte Lauf wurde unterbrochen.")
+        # Hier läuft kein Vorgang (mehr). Direkt nach einem Versionswechsel trägt das Startprogramm das Ergebnis erst
+        # ein, wenn die neue Version antwortet – so lange gilt der Lauf als nicht unterbrochen (Frist 2 Minuten).
+        try:
+            age = time.time() - datetime.fromisoformat(st.get("updated_at") or "").timestamp()
+        except ValueError:
+            age = 1e9
+        if age > 120:
+            busy = False
+            st.update(state="error", message="Der letzte Lauf wurde unterbrochen.")
     cur = st.get("current") or {}
     if cur.get("commit") != APP_VERSION:
         st["current"] = local_update.version_info(APP_VERSION)

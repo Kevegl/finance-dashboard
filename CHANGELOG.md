@@ -20,6 +20,8 @@ Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHu
 
 ### Behoben
 - Anmeldung mit einem Benutzernamen mit Umlauten (z.B. «Jürg») schlug mit einer Fehlermeldung fehl.
+- Programm und Python-Variante: Nach einem erfolgreichen Update erschien kurz «Der letzte Lauf wurde unterbrochen»,
+  weil die neue Version schon antwortete, bevor das Ergebnis eingetragen war. Jetzt erscheint «Update installiert».
 
 ### Verbessert
 - Auch falsche Passwörter in den Einstellungen zählen zur Sperre nach 5 Fehlversuchen.
