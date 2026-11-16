@@ -1,0 +1,65 @@
+# Prüfungen bei jedem Push und Pull Request: Syntax, Server-Modus, lokaler Betrieb auf Windows/macOS/Linux
+# (inkl. der Startskripte start.bat / start.command / start.sh) und das Docker-Image.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"   # älteste unterstützte Version
+      - name: Python, JavaScript und Shell prüfen
+        run: |
+          python -m py_compile app/*.py finance-dashboard-update tests/*.py packaging/*.py
+          for f in app/static/*.js; do node --check "$f"; done
+          bash -n install.sh start.sh start.command finance-dashboard-cert.sh
+      - name: Server-Modus mit Beispiel-CSV
+        run: python tests/smoke_server.py
+
+  local:
+    name: lokal (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Startprogramm direkt
+        run: python tests/smoke_local.py
+      - name: start.bat (Windows)
+        if: runner.os == 'Windows'
+        run: python tests/smoke_local.py -- cmd /c start.bat
+      - name: start.command (macOS)
+        if: runner.os == 'macOS'
+        run: python tests/smoke_local.py -- bash start.command
+      - name: start.sh (Linux)
+        if: runner.os == 'Linux'
+        run: python tests/smoke_local.py -- bash start.sh
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image bauen und starten
+        run: |
+          docker build -t fd-test .
+          docker run -d --name fd -p 18080:8080 fd-test
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:18080/api/health && break; sleep 1; done
+          curl -sf http://127.0.0.1:18080/api/health | grep -q '"app": "finance-dashboard"'
+          docker exec fd pdftotext -v
+          docker logs fd
