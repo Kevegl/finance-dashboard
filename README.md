@@ -11,6 +11,9 @@ Importiert CSV-Exporte von **Relai** (Bitcoin) und **Interactive Brokers** (ETFs
 - Hell/Dunkel-Modus, funktioniert auch auf dem Handy
 - Spartipps & Vorsorge: Steuer-Schätzung, 3a-Stand, FIRE-/Pensionsrechner und Fristen (Kanton Zürich)
 
+Weitere Funktionen folgen, z.B. Importe von weiteren Brokern und 3a-Anbietern. Probleme oder Wünsche bitte als
+[Issue](https://github.com/Kevegl/finance-dashboard/issues) melden, siehe [Probleme & Wünsche](#probleme--wünsche).
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dunkel.png">
   <img src="docs/screenshots/dashboard-hell.png" alt="Übersicht des Finanz-Dashboards mit Gesamtwert, Wertentwicklung, Aufteilung und Positionen">
@@ -308,6 +311,22 @@ Näherungen (Bundessteuer nach amtlichem Tarif 2026, Staatssteuer vereinfacht) u
   Markt zu (z. B. SMI, Weltbörsen, Wall Street, Schwellenländer, Immobilien Schweiz, SNB-Zinsen, Gold) und zeigt
   zusätzlich Meldungen zum Anbieter (VIAC, Finpension) und zur Säule 3a allgemein. Ein eigener News-Suchbegriff
   einer Position hat Vorrang.
+
+## Probleme & Wünsche
+
+**Etwas funktioniert nicht?** Eröffne ein [Issue auf GitHub](https://github.com/Kevegl/finance-dashboard/issues/new)
+und beschreibe kurz:
+- welche Variante du nutzt (Programm für Windows/Mac, Python-Variante, Docker oder Proxmox) und die Version
+  (*Einstellungen → Updates*),
+- was du gemacht hast, was passiert ist und was du erwartet hättest,
+- die Fehlermeldung bzw. einen Screenshot.
+
+> **Bitte keine echten Finanzdaten anhängen**: keine eigenen CSV/PDF-Exporte, Sicherungen, Kontonummern oder
+> Screenshots mit echten Beträgen. Issues sind öffentlich. Ersetze Werte durch erfundene oder schwärze sie.
+> Bei einem Importproblem helfen zwei, drei Zeilen der Datei mit geänderten Zahlen.
+
+**Geplant:** Weitere Funktionen folgen, z.B. Importe von weiteren Brokern und 3a-Anbietern. Wünsche dafür
+ebenfalls gern als Issue, am besten mit einer Beispieldatei mit erfundenen Werten.
 
 ## Entwicklung & Tests
 
