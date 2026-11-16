@@ -68,6 +68,7 @@ h3 { font-size: 17px; }
 }
 .brand { display: flex; align-items: center; gap: 12px; }
 .logo {
+  flex-shrink: 0;
   width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center;
   background: var(--ink); color: var(--page);
 }
@@ -284,7 +285,20 @@ details ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size
   .dlg-body.form-grid { grid-template-columns: minmax(0, 1fr); }
   .chart { height: 240px; }
   .topbar .btn.primary { padding: 0 12px; }
+  /* Titel in einer Zeile, Knöpfe als eigene Zeile darunter */
+  .topbar { flex-wrap: wrap; gap: 10px; padding-top: 10px; padding-bottom: 10px; }
+  .brand { flex: 1 1 100%; min-width: 0; }
+  .brand > div { min-width: 0; }
+  .brand h1, .brand .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .actions { flex: 1 1 100%; justify-content: flex-start; }
+  .topbar #btnImport { margin-left: auto; }
   input[type="search"] { width: 100%; }
+}
+@media (max-width: 400px) {
+  .actions { gap: 6px; }
+  .topbar .btn.icon { width: 36px; height: 36px; }
+  .topbar .btn.primary { padding: 0 12px; height: 36px; }
+  .topbar .btn.primary svg { display: none; }
 }
 
 /* Titel bearbeiten */
