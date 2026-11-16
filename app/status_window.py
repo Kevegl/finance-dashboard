@@ -18,6 +18,11 @@ TEXT = {
         "hint": "Du kannst dieses Fenster minimieren. Schliessen beendet das Dashboard.",
         "confirm_title": "Dashboard beenden?",
         "confirm": "Das Finanz-Dashboard wird beendet. Deine Daten sind gespeichert.",
+        "reset": "Passwort zurücksetzen …",
+        "reset_title": "Anmeldung zurücksetzen?",
+        "reset_confirm": "Deine Daten bleiben unverändert erhalten. Nur die Anmeldung wird zurückgesetzt: Passwort, "
+                         "Zwei-Faktor-Anmeldung und alle Sitzungen werden gelöscht.\n\nDanach öffnet sich der Browser, "
+                         "und du legst dort ein neues Passwort fest.",
     },
     "en": {
         "starting": "Starting …", "running": "Running on this computer", "updating": "Updating …",
@@ -26,6 +31,11 @@ TEXT = {
         "hint": "You can minimise this window. Closing it quits the dashboard.",
         "confirm_title": "Quit the dashboard?",
         "confirm": "The finance dashboard will be closed. Your data is saved.",
+        "reset": "Reset password …",
+        "reset_title": "Reset sign-in?",
+        "reset_confirm": "Your data stays untouched. Only the sign-in is reset: password, two-factor "
+                         "authentication and all sessions are deleted.\n\nThe browser then opens and you set a "
+                         "new password there.",
     },
 }
 COLOR = {"running": "#1f9d55", "stopping": "#8a8a8a"}   # sonst orange (startet, aktualisiert)
@@ -76,6 +86,9 @@ class StatusWindow:
         self.btn_open.grid(row=4, column=0, sticky="w")
         self.btn_quit = ttk.Button(frm, command=self.ask_quit)
         self.btn_quit.grid(row=4, column=1, sticky="e", padx=(12, 0))
+        self.btn_reset = tk.Label(frm, cursor="hand2", foreground="#666666", font=("TkDefaultFont", 9, "underline"))
+        self.btn_reset.grid(row=5, column=0, columnspan=2, sticky="w", pady=(12, 0))
+        self.btn_reset.bind("<Button-1>", lambda _e: self.ask_reset())
         frm.columnconfigure(1, weight=1)
         self.root.protocol("WM_DELETE_WINDOW", self.ask_quit)
         self.shown = None
@@ -95,6 +108,7 @@ class StatusWindow:
         self.dot.itemconfigure(self.dot_id, fill=COLOR.get(state, "#d97706"))
         self.hint.configure(text=self.t("hint"))
         self.btn_open.configure(text=self.t("open"), state="normal" if state == "running" else "disabled")
+        self.btn_reset.configure(text=self.t("reset"))
         self.btn_quit.configure(text=self.t("quit"), state="disabled" if self.l.stopping else "normal")
 
     def ask_quit(self):
@@ -103,6 +117,12 @@ class StatusWindow:
         if messagebox.askokcancel(self.t("confirm_title"), self.t("confirm"), parent=self.root):
             threading.Thread(target=self.l.request_stop, daemon=True).start()
             self.update_texts()
+
+    def ask_reset(self):
+        if self.l.stopping or self.l.status != "running":
+            return
+        if messagebox.askokcancel(self.t("reset_title"), self.t("reset_confirm"), parent=self.root):
+            threading.Thread(target=self.l.reset_login, daemon=True).start()
 
     def run(self, worker):
         """Läuft im Hauptthread, bis die Überwachung (worker) endet."""

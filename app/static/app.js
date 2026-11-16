@@ -805,11 +805,15 @@ $("#btnRefresh").onclick = async () => {
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => state.summary && renderChart(), 120); });
 
 /* ---------- Anmeldung ---------- */
-let authMode = "login";
+let authMode = "login", authNeedCode = false;
 function showAuth(mode) {
   authMode = mode;
   $("#topbar").hidden = true; $("#app").hidden = true; $("#authView").hidden = false;
   for (const d of document.querySelectorAll("dialog[open]")) d.close();
+  const rec = mode === "recover";
+  $("#authForm").hidden = rec; $("#recForm").hidden = !rec;
+  if (rec) { $("#recErr").hidden = true; $("#recForm").elements.rcode.focus(); return; }
+  if (mode === "setup") authNeedCode = false;
   const setup = mode === "setup";
   $("#authTitle").textContent = setup ? L("Willkommen – Zugang einrichten", "Welcome – set up your login") : L("Anmelden", "Sign in");
   $("#authSub").textContent = setup
@@ -821,7 +825,8 @@ function showAuth(mode) {
   if (setup && !f.elements.username.value) f.elements.username.value = "admin";
   $("#authSubmit").textContent = setup ? L("Zugang einrichten", "Set up login") : L("Anmelden", "Sign in");
   $("#authErr").hidden = true;
-  (setup || !f.elements.username.value ? f.elements.username : f.elements.password).focus();
+  $("#authCodeField").hidden = !authNeedCode; $("#authForgot").hidden = setup;
+  (authNeedCode ? f.elements.code : setup || !f.elements.username.value ? f.elements.username : f.elements.password).focus();
 }
 function showApp() {
   $("#authView").hidden = true; $("#topbar").hidden = false; $("#app").hidden = false;
@@ -841,12 +846,74 @@ $("#authForm").onsubmit = async (e) => {
   }
   $("#authSubmit").disabled = true;
   try {
-    await api(authMode === "setup" ? "/api/setup" : "/api/login", { method: "POST", body: { username, password, lang: LANG } });
-    f.elements.password.value = ""; f.elements.password2.value = "";
+    const body = { username, password, lang: LANG };
+    if (authMode !== "setup" && authNeedCode) body.code = f.elements.code.value.trim();
+    const r = await api(authMode === "setup" ? "/api/setup" : "/api/login", { method: "POST", body });
+    f.elements.password.value = ""; f.elements.password2.value = ""; f.elements.code.value = "";
+    authNeedCode = false;
+    if (r.recovery_code) await showRecoveryCode(r.recovery_code);
     showApp();
-  } catch (ex) { fail(ex.message); }
+  } catch (ex) {
+    if (ex.message === "totp_required") {
+      authNeedCode = true;
+      $("#authCodeField").hidden = false; f.elements.code.focus();
+      fail(L("Bitte den Code aus der Authenticator-App eingeben.", "Please enter the code from your authenticator app."));
+    } else fail(ex.message);
+  }
   $("#authSubmit").disabled = false;
 };
+$("#authForgot").onclick = () => { $("#authErr").hidden = true; showAuth("recover"); };
+$("#recBack").onclick = () => showAuth("login");
+$("#recForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const f = e.target, err = $("#recErr");
+  const fail = (m) => { err.textContent = m; err.hidden = false; };
+  const code = f.elements.rcode.value.trim(), password = f.elements.password.value;
+  if (!code || !password) return fail(L("Bitte Wiederherstellungscode und neues Passwort eingeben.", "Please enter the recovery code and a new password."));
+  if (password.length < 8) return fail(L("Das Passwort muss mindestens 8 Zeichen lang sein.", "The password must be at least 8 characters long."));
+  if (password !== f.elements.password2.value) return fail(L("Die Passwörter stimmen nicht überein.", "The passwords do not match."));
+  err.hidden = true;
+  const btn = f.querySelector("button[type=submit]"); btn.disabled = true;
+  try {
+    const r = await api("/api/recovery", { method: "POST", body: { code, password } });
+    f.reset(); authNeedCode = false;
+    await showRecoveryCode(r.recovery_code, true);
+    showApp();
+  } catch (ex) { fail(ex.message); }
+  btn.disabled = false;
+};
+
+/* Wiederherstellungscode einmalig anzeigen; weiter erst nach Bestätigung */
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  return new Promise((res, rej) => {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy") ? res() : rej(new Error("copy")); } catch (x) { rej(x); } finally { ta.remove(); }
+  });
+}
+function wireCopy(btn, getText) {
+  btn.onclick = () => copyText(getText()).then(() => toast(L("Kopiert", "Copied")), () => toast(L("Kopieren nicht möglich – bitte von Hand markieren", "Copy not possible – please select it manually")));
+}
+function showRecoveryCode(code, afterReset = false) {
+  return new Promise((resolve) => {
+    const d = $("#dlgRecovery"), ack = $("#rcAck");
+    $("#rcCode").textContent = code;
+    $("#rcTitle").textContent = L("Wiederherstellungscode – jetzt sicher aufbewahren", "Recovery code – store it safely now");
+    $("#rcText").textContent = (afterReset ? L("Dein Passwort wurde zurückgesetzt, der alte Code ist ungültig. ", "Your password was reset and the old code is no longer valid. ") : "")
+      + L("Mit diesem Code kannst du ein vergessenes Passwort zurücksetzen. Er wird nur dieses eine Mal angezeigt. Bewahre ihn getrennt vom Passwort auf (z.B. im Passwortmanager oder ausgedruckt).",
+        "With this code you can reset a forgotten password. It is shown only this once. Keep it separate from your password (e.g. in a password manager or printed out).");
+    $("#rcCopy").textContent = L("Kopieren", "Copy"); $("#rcOk").textContent = L("Weiter", "Continue");
+    $("#rcAck").nextElementSibling.textContent = L("Ich habe den Code gespeichert", "I have saved the code");
+    ack.checked = false; $("#rcOk").disabled = true;
+    ack.onchange = () => { $("#rcOk").disabled = !ack.checked; };
+    wireCopy($("#rcCopy"), () => code);
+    $("#rcOk").onclick = () => { if (!ack.checked) return; d.close(); $("#rcCode").textContent = ""; resolve(); };
+    d.oncancel = (e) => e.preventDefault();
+    d.showModal();
+  });
+}
 
 /* ---------- Einstellungen ---------- */
 function applyRoute() {
@@ -873,6 +940,14 @@ async function loadSettings() {
     a.elements.username.value = s.user || "";
     $("#setSessions").textContent = L(`${s.sessions} aktive ${s.sessions === 1 ? "Sitzung" : "Sitzungen"} (angemeldete Browser/Geräte). Sitzungen laufen nach 30 Tagen ab.`,
       `${s.sessions} active ${s.sessions === 1 ? "session" : "sessions"} (signed-in browsers/devices). Sessions expire after 30 days.`);
+    renderTotp(s);
+    $("#recState").innerHTML = s.recovery
+      ? esc(L("Ein Wiederherstellungscode ist vorhanden. Aus Sicherheitsgründen wird er nicht mehr angezeigt – bei Verlust kannst du einen neuen erzeugen (der alte wird dann ungültig).",
+        "A recovery code exists. For security it is not shown again – if you lose it you can generate a new one (the old one becomes invalid)."))
+      : `<span class="warn"><b>${esc(L("Es gibt noch keinen Wiederherstellungscode.", "There is no recovery code yet."))}</b></span> `
+        + esc(L("Erzeuge jetzt einen und bewahre ihn sicher auf – sonst ist ein vergessenes Passwort nur über den Befehl auf dem Server bzw. das Statusfenster zurückzusetzen.",
+          "Generate one now and keep it safe – otherwise a forgotten password can only be reset with the server command or the status window."));
+    loadAuthLog();
     loadUpdate(true).then(() => { if (updWaiting() || (upd.st && upd.st.busy)) { upd.since = upd.since || Date.now(); updPoll(); } });
     $("#localCard").hidden = !s.local;
     state.localStarter = s.local ? s.local.starter : null;
@@ -882,6 +957,79 @@ async function loadSettings() {
     $("#setData").textContent = L(`${s.transactions} Transaktionen gespeichert · Verbindung ${s.https ? "verschlüsselt (HTTPS)" : "unverschlüsselt (HTTP)"}.`,
       `${s.transactions} transactions stored · connection ${s.https ? "encrypted (HTTPS)" : "unencrypted (HTTP)"}.`);
   } catch (e) { toast(e.message); }
+}
+/* Zwei-Faktor */
+function renderTotp(s) {
+  const on = !!s.totp, pending = !!state.totpSetup;
+  $("#totpState").textContent = on
+    ? L("Eingeschaltet: Bei der Anmeldung wird zusätzlich ein Code aus der Authenticator-App verlangt.", "On: signing in additionally requires a code from your authenticator app.")
+    : pending ? L("Einrichtung läuft – bestätige den Code, damit die Zwei-Faktor-Anmeldung aktiv wird.", "Setup in progress – confirm a code to activate two-factor sign-in.")
+    : L("Ausgeschaltet. Optional: Schützt dein Konto zusätzlich mit einem Code aus einer Authenticator-App.", "Off. Optional: protects your account with a code from an authenticator app.");
+  $("#formTotpStart").hidden = on || pending; $("#formTotpConfirm").hidden = on || !pending; $("#formTotpOff").hidden = !on;
+}
+function totpErr(id, m) { const e = $(id); e.textContent = m || ""; e.hidden = !m; }
+$("#formTotpStart").onsubmit = async (e) => {
+  e.preventDefault(); const f = e.target; totpErr("#totpErr");
+  if (!f.elements.password.value) return totpErr("#totpErr", L("Bitte das aktuelle Passwort eingeben.", "Please enter your current password."));
+  try {
+    const r = await api("/api/account/totp/start", { method: "POST", body: { password: f.elements.password.value } });
+    f.reset(); state.totpSetup = r;
+    $("#totpKey").textContent = r.secret.replace(/(.{4})/g, "$1 ").trim();
+    $("#totpLink").href = r.uri;
+    $("#formTotpConfirm").elements.code.value = ""; totpErr("#totpErr2");
+    renderTotp({ totp: false }); $("#formTotpConfirm").elements.code.focus();
+  } catch (ex) { totpErr("#totpErr", ex.message); }
+};
+wireCopy($("#btnTotpCopy"), () => (state.totpSetup || {}).secret || "");
+$("#btnTotpCancel").onclick = () => { state.totpSetup = null; $("#totpKey").textContent = ""; loadSettings(); };
+$("#formTotpConfirm").onsubmit = async (e) => {
+  e.preventDefault(); const f = e.target; totpErr("#totpErr2");
+  try {
+    await api("/api/account/totp/confirm", { method: "POST", body: { code: f.elements.code.value } });
+    state.totpSetup = null; $("#totpKey").textContent = ""; f.reset();
+    toast(L("Zwei-Faktor-Anmeldung eingeschaltet", "Two-factor sign-in switched on")); loadSettings();
+  } catch (ex) { totpErr("#totpErr2", ex.message); }
+};
+$("#formTotpOff").onsubmit = async (e) => {
+  e.preventDefault(); const f = e.target; totpErr("#totpErr3");
+  try {
+    await api("/api/account/totp/disable", { method: "POST", body: { password: f.elements.password.value, code: f.elements.code.value } });
+    f.reset(); toast(L("Zwei-Faktor-Anmeldung ausgeschaltet", "Two-factor sign-in switched off")); loadSettings();
+  } catch (ex) { totpErr("#totpErr3", ex.message); }
+};
+$("#formRecNew").onsubmit = async (e) => {
+  e.preventDefault(); const f = e.target, err = $("#recNewErr"); err.hidden = true;
+  if (!f.elements.password.value) { err.textContent = L("Bitte das aktuelle Passwort eingeben.", "Please enter your current password."); err.hidden = false; return; }
+  try {
+    const r = await api("/api/account/recovery/new", { method: "POST", body: { password: f.elements.password.value } });
+    f.reset(); await showRecoveryCode(r.recovery_code); loadSettings();
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+};
+
+/* Anmeldeprotokoll */
+const authEvent = (e) => ({
+  setup: L("Zugang eingerichtet", "Login set up"), login_ok: L("Angemeldet", "Signed in"),
+  login_fail: L("Fehlversuch (Passwort)", "Failed attempt (password)"), login_blocked: L("Gesperrt (zu viele Fehlversuche)", "Blocked (too many failed attempts)"),
+  totp_fail: L("Fehlversuch (Code)", "Failed attempt (code)"), password_fail: L("Fehlversuch (Passwort in den Einstellungen)", "Failed attempt (password in settings)"), password_changed: L("Passwort geändert", "Password changed"),
+  recovery_used: L("Passwort per Wiederherstellungscode zurückgesetzt", "Password reset with recovery code"),
+  recovery_fail: L("Fehlversuch (Wiederherstellungscode)", "Failed attempt (recovery code)"),
+  recovery_new: L("Neuer Wiederherstellungscode", "New recovery code"), totp_on: L("Zwei-Faktor eingeschaltet", "Two-factor switched on"),
+  totp_off: L("Zwei-Faktor ausgeschaltet", "Two-factor switched off"), reset_cli: L("Anmeldung per Befehl/Statusfenster zurückgesetzt", "Sign-in reset via command/status window"),
+  logout_others: L("Andere Geräte abgemeldet", "Other devices signed out") }[e] || e);
+async function loadAuthLog() {
+  try {
+    const r = await api("/api/auth/log");
+    const fmt = (ts) => new Date(ts * 1000).toLocaleString(LANG === "en" ? "en-GB" : "de-CH", { dateStyle: "medium", timeStyle: "short" });
+    const last = r.last_login ? L(`Letzte Anmeldung: ${fmt(r.last_login.ts)} (${r.last_login.ip})`, `Last sign-in: ${fmt(r.last_login.ts)} (${r.last_login.ip})`) : L("Letzte Anmeldung: –", "Last sign-in: –");
+    const n = r.fails_30d;
+    const el = $("#authSummary");
+    el.innerHTML = esc(last) + " · " + (n ? `<span class="warn"><b>${esc(L(`${n} Fehlversuch${n === 1 ? "" : "e"} in 30 Tagen`, `${n} failed attempt${n === 1 ? "" : "s"} in 30 days`))}</b></span>`
+      : esc(L("keine Fehlversuche in 30 Tagen", "no failed attempts in 30 days")));
+    $("#authLogList").innerHTML = r.entries.map((x) => {
+      const bad = ["login_fail", "totp_fail", "recovery_fail", "password_fail", "login_blocked"].includes(x.event);
+      return `<li class="${bad ? "bad" : ""}"><span class="t">${esc(fmt(x.ts))}</span><span class="ev">${esc(authEvent(x.event))}</span><span class="ip">${esc(x.ip)}</span></li>`;
+    }).join("") || `<li>${esc(L("Noch keine Einträge.", "No entries yet."))}</li>`;
+  } catch (e) { /* Protokoll ist optional */ }
 }
 $("#btnSettings").onclick = () => { location.hash = location.hash === "#/einstellungen" ? "" : "#/einstellungen"; };
 $("#btnBack").onclick = () => { location.hash = ""; };
@@ -924,7 +1072,7 @@ $("#btnLogoutOthers").onclick = async () => {
 };
 $("#btnLogout").onclick = async () => {
   await api("/api/logout", { method: "POST" }).catch(() => {});
-  location.hash = ""; state.summary = null; state.txs = [];
+  location.hash = ""; state.summary = null; state.txs = []; state.totpSetup = null; authNeedCode = false;
   showAuth("login");
 };
 $("#btnQuit").onclick = async () => {

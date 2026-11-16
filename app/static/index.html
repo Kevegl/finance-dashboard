@@ -49,8 +49,22 @@
     <label class="field">Benutzername<input name="username" autocomplete="username" required></label>
     <label class="field">Passwort<input name="password" type="password" autocomplete="current-password" required></label>
     <label class="field" id="authRepeat" hidden>Passwort wiederholen<input name="password2" type="password" autocomplete="new-password"></label>
+    <label class="field" id="authCodeField" hidden>Code aus der Authenticator-App<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456"></label>
     <p class="err" id="authErr" hidden></p>
     <button class="btn primary wide" id="authSubmit" type="submit">Anmelden</button>
+    <button class="btn ghost wide" id="authForgot" type="button">Passwort vergessen?</button>
+  </form>
+  <form class="auth-card" id="recForm" novalidate hidden>
+    <span class="logo big" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <h2>Passwort vergessen?</h2>
+    <p class="hint">Gib den Wiederherstellungscode ein, den du bei der Einrichtung erhalten hast, und lege ein neues Passwort fest. Eine Zwei-Faktor-Anmeldung wird dabei ausgeschaltet.</p>
+    <label class="field">Wiederherstellungscode<input name="rcode" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" required></label>
+    <label class="field">Neues Passwort<input name="password" type="password" autocomplete="new-password" required></label>
+    <label class="field">Neues Passwort wiederholen<input name="password2" type="password" autocomplete="new-password" required></label>
+    <p class="err" id="recErr" hidden></p>
+    <button class="btn primary wide" type="submit">Passwort zurücksetzen</button>
+    <button class="btn ghost wide" id="recBack" type="button">Zurück zur Anmeldung</button>
+    <p class="hint" data-i18n-html="recNoCode">Kein Code mehr? Auf einem Server oder in Docker hilft der Befehl <code>python3 server.py --reset-password</code> (auf dem Server ausführen). Im lokalen Betrieb wählst du im Statusfenster «Passwort zurücksetzen».</p>
   </form>
 </section>
 
@@ -217,8 +231,44 @@
   </article>
 
   <article class="card settings-card">
+    <h3>Zwei-Faktor-Anmeldung</h3>
+    <p class="hint" id="totpState">–</p>
+    <form class="settings-form" id="formTotpStart" novalidate hidden>
+      <label class="field full">Aktuelles Passwort<input name="password" type="password" autocomplete="current-password" required></label>
+      <p class="err full" id="totpErr" hidden></p>
+      <div class="form-actions"><button class="btn primary" type="submit">Einschalten</button></div>
+    </form>
+    <form class="settings-form" id="formTotpConfirm" novalidate hidden>
+      <p class="hint full">Gib diesen Schlüssel in deiner Authenticator-App ein (Konto hinzufügen, «Schlüssel manuell eingeben», zeitbasiert).</p>
+      <div class="secret-box full"><code id="totpKey" class="secret"></code><button class="btn ghost" id="btnTotpCopy" type="button">Kopieren</button></div>
+      <p class="hint full"><a id="totpLink" href="#">In Authenticator-App öffnen</a> (funktioniert auf dem Handy)</p>
+      <label class="field full">Code aus der App (6 Stellen)<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" required></label>
+      <p class="err full" id="totpErr2" hidden></p>
+      <div class="form-actions"><button class="btn ghost" id="btnTotpCancel" type="button">Abbrechen</button><button class="btn primary" type="submit">Bestätigen und aktivieren</button></div>
+    </form>
+    <form class="settings-form" id="formTotpOff" novalidate hidden>
+      <label class="field">Aktuelles Passwort<input name="password" type="password" autocomplete="current-password" required></label>
+      <label class="field">Code aus der App (6 Stellen)<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" required></label>
+      <p class="err full" id="totpErr3" hidden></p>
+      <div class="form-actions"><button class="btn ghost danger" type="submit">Ausschalten</button></div>
+    </form>
+  </article>
+
+  <article class="card settings-card">
+    <h3>Wiederherstellungscode</h3>
+    <p class="hint" id="recState">–</p>
+    <form class="settings-form" id="formRecNew" novalidate>
+      <label class="field full">Aktuelles Passwort<input name="password" type="password" autocomplete="current-password" required></label>
+      <p class="err full" id="recNewErr" hidden></p>
+      <div class="form-actions"><button class="btn primary" type="submit">Neuen Code erzeugen</button></div>
+    </form>
+  </article>
+
+  <article class="card settings-card">
     <h3>Sitzungen</h3>
     <p class="hint" id="setSessions">–</p>
+    <p class="hint" id="authSummary"></p>
+    <details class="auth-log"><summary>Anmeldeprotokoll</summary><ul id="authLogList"></ul></details>
     <div class="form-actions left">
       <button class="btn ghost" id="btnLogoutOthers">Alle anderen Geräte abmelden</button>
       <button class="btn ghost danger" id="btnLogout">Abmelden</button>
@@ -373,6 +423,16 @@
     <button class="btn ghost" id="pfNewCancel">Abbrechen</button>
     <button class="btn primary" id="pfNewOk">Anlegen</button>
   </div>
+</dialog>
+
+<dialog id="dlgRecovery" class="dlg confirm">
+  <div class="dlg-head"><h3 id="rcTitle">Wiederherstellungscode – jetzt sicher aufbewahren</h3></div>
+  <div class="dlg-body">
+    <p class="hint" id="rcText">Mit diesem Code kannst du ein vergessenes Passwort zurücksetzen. Er wird nur dieses eine Mal angezeigt. Bewahre ihn getrennt vom Passwort auf (z.B. im Passwortmanager oder ausgedruckt).</p>
+    <div class="secret-box"><code id="rcCode" class="secret"></code><button class="btn ghost" id="rcCopy" type="button">Kopieren</button></div>
+    <label class="check"><input type="checkbox" id="rcAck"> <span>Ich habe den Code gespeichert</span></label>
+  </div>
+  <div class="dlg-foot"><button class="btn primary" id="rcOk" disabled>Weiter</button></div>
 </dialog>
 
 <dialog id="dlgConfirm" class="dlg confirm">

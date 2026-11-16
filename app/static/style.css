@@ -535,3 +535,19 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); marg
 .plan-years { display: flex; flex-wrap: wrap; gap: 6px; flex-basis: 100%; }
 .plan-years small { color: var(--muted); font-size: 11.5px; margin-left: 4px; }
 .plan-upload .err { flex-basis: 100%; margin: 0; }
+
+/* Zwei-Faktor, Wiederherstellungscode, Anmeldeprotokoll */
+.secret-box { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.secret { flex: 1 1 200px; min-width: 0; padding: 10px 12px; background: var(--page); border: 1px solid var(--border);
+  border-radius: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 15px;
+  letter-spacing: .06em; overflow-wrap: anywhere; user-select: all; }   /* Umbruch nur an Bindestrichen/Leerzeichen */
+.auth-card .btn.wide.ghost { height: 38px; }
+.auth-card code { font-size: 12px; white-space: nowrap; }
+.auth-log { margin-top: 8px; }
+.auth-log ul { list-style: none; padding: 0; margin: 8px 0 0; max-height: 320px; overflow-y: auto; color: var(--ink-2); }
+.auth-log li { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.auth-log li .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+.auth-log li .ip { color: var(--muted); margin-left: auto; }
+.auth-log li.bad .ev { color: var(--down); font-weight: 600; }
+.hint.warn, .hint .warn { color: var(--down); }
+@media (max-width: 480px) { .auth-log li .ip { margin-left: 0; } }

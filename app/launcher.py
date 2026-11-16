@@ -39,7 +39,7 @@ HEALTH_WAIT = 45
 FROZEN = getattr(sys, "frozen", False)     # .exe (Windows) bzw. .app (macOS), gebaut mit PyInstaller
 
 
-def serve(app_dir):
+def serve(app_dir, extra=()):
     """Kindprozess-Modus der .exe/App: startet server.py aus app_dir mit dem eingebauten Python."""
     if FROZEN:
         # Module zuerst aus app_dir laden (aktualisierte Version), erst danach aus dem Paket
@@ -52,12 +52,12 @@ def serve(app_dir):
             except OSError:
                 pass
     sys.path.insert(0, str(app_dir))
-    sys.argv = [str(Path(app_dir, "server.py"))]
+    sys.argv = [str(Path(app_dir, "server.py")), *extra]
     runpy.run_path(str(Path(app_dir, "server.py")), run_name="__main__")
 
 
 if len(sys.argv) >= 3 and sys.argv[1] == "--serve":
-    serve(sys.argv[2])
+    serve(sys.argv[2], sys.argv[3:])
     sys.exit(0)
 
 import local_update as lu  # noqa: E402  (liegt neben dieser Datei)
@@ -162,17 +162,34 @@ class Launcher:
             except OSError:
                 return False
 
-    def start(self, app_dir, version):
+    def _server_env(self, version):
         env = {k: v for k, v in os.environ.items()
                if k not in ("FD_CERT", "FD_KEY", "FD_REPO_DIR", "FD_LAUNCHER_DELEGATED", "FD_BUNDLE_APP")}
         env.update(FD_LOCAL="1", FD_HOST="127.0.0.1", FD_PORT=str(self.port), FD_DATA_DIR=str(self.data),
                    FD_APP_VERSION=version, FD_BUNDLED_VERSION=self.bundled, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8:replace")
+        return env
+
+    @staticmethod
+    def _server_cmd(app_dir, extra=()):
         if getattr(sys, "frozen", False):
-            cmd = [sys.executable, "--serve", str(app_dir)]
-        else:
-            cmd = [sys.executable, str(Path(app_dir, "server.py"))]
-        self.child = subprocess.Popen(cmd, cwd=str(app_dir), env=env)
+            return [sys.executable, "--serve", str(app_dir), *extra]
+        return [sys.executable, str(Path(app_dir, "server.py")), *extra]
+
+    def start(self, app_dir, version):
+        self.child = subprocess.Popen(self._server_cmd(app_dir), cwd=str(app_dir), env=self._server_env(version))
         return self.child
+
+    def reset_login(self):
+        """Setzt die Anmeldung zurück (Daten bleiben): führt `server.py --reset-password` gegen denselben
+        Datenordner aus und öffnet danach den Browser. Der laufende Server liest auth_* bei jeder Anfrage."""
+        app_dir, version = self.active()
+        try:
+            subprocess.run(self._server_cmd(app_dir, ["--reset-password"]), cwd=str(app_dir),
+                           env=self._server_env(version), timeout=60, check=False)
+        except (OSError, subprocess.SubprocessError):
+            return False
+        webbrowser.open(self.url)
+        return True
 
     def wait_healthy(self):
         deadline = time.time() + HEALTH_WAIT

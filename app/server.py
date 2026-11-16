@@ -36,6 +36,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import base64
+import struct
 import subprocess
 import zipfile
 
@@ -83,6 +84,7 @@ TLS_CERT = None if LOCAL else os.environ.get("FD_CERT")
 TLS_KEY = None if LOCAL else os.environ.get("FD_KEY")
 FAILED = {}            # IP -> [Zeitpunkte fehlgeschlagener Anmeldungen]
 FAILED_LOCK = threading.Lock()
+BLOCK_LOGGED = {}      # IP -> Zeitpunkt des letzten Protokolleintrags «login_blocked»
 MAX_FAILS, FAIL_WINDOW = 5, 900   # 5 Fehlversuche in 15 Min. -> 15 Min. gesperrt
 PRICE_TTL = int(os.environ.get("FD_PRICE_TTL", "14400"))
 # Updates über das Dashboard: der Server schreibt nur eine Auftragsdatei, ausgeführt wird sie vom
@@ -320,6 +322,107 @@ def check_new_password(pw):
         raise ValueError(f"Das Passwort muss mindestens {MIN_PW} Zeichen lang sein.")
 
 
+# --- Anmeldeprotokoll
+AUTH_LOG_KEEP = 500
+FAIL_EVENTS = ("login_fail", "totp_fail", "recovery_fail", "password_fail")
+
+
+def log_auth(event, ip, detail=""):
+    """Schreibt ein Anmeldeereignis ins Protokoll (letzte 500) und als Zeile auf stdout (Journal).
+    detail ist nur ein gekürzter User-Agent o.ä. – nie Passwörter oder Codes."""
+    detail = (detail or "")[:120]
+    try:
+        with DB_LOCK, db() as con:
+            con.execute("INSERT INTO auth_log(ts, event, ip, detail) VALUES (?,?,?,?)",
+                        (time.time(), event, ip or "", detail))
+            con.execute("DELETE FROM auth_log WHERE id <= (SELECT MAX(id) FROM auth_log) - ?", (AUTH_LOG_KEEP,))
+    except sqlite3.Error:
+        pass
+    print(f"Anmeldung: {event} von {ip or '-'}", flush=True)
+
+
+def auth_log_summary(session_created):
+    since = time.time() - 30 * 86400
+    with DB_LOCK, db() as con:
+        rows = [dict(r) for r in con.execute("SELECT ts, event, ip, detail FROM auth_log ORDER BY id DESC LIMIT 30")]
+        last = con.execute("SELECT ts, ip FROM auth_log WHERE event IN ('login_ok','recovery_used','setup') AND ts < ? "
+                           "ORDER BY ts DESC LIMIT 1", (session_created or time.time(),)).fetchone()
+        fails = con.execute(f"SELECT COUNT(*) FROM auth_log WHERE ts >= ? AND event IN ({','.join('?' * len(FAIL_EVENTS))})",
+                            (since, *FAIL_EVENTS)).fetchone()[0]
+    return {"entries": rows, "last_login": dict(last) if last else None, "fails_30d": fails}
+
+
+# --- Zwei-Faktor (TOTP, RFC 6238: HMAC-SHA1, 30 s, 6 Stellen)
+TOTP_LOCK = threading.Lock()
+
+
+def totp_new_secret():
+    return base64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")
+
+
+def totp_code(secret, step):
+    key = base64.b32decode(secret + "=" * (-len(secret) % 8), casefold=True)
+    mac = hmac.new(key, struct.pack(">Q", step), hashlib.sha1).digest()
+    off = mac[-1] & 0x0F
+    return f"{(struct.unpack('>I', mac[off:off + 4])[0] & 0x7FFFFFFF) % 1_000_000:06d}"
+
+
+def totp_match(secret, code, last_step=-1):
+    """Gibt den passenden Zeitschritt zurück (Fenster ±1, nur neuer als last_step) oder None."""
+    code = re.sub(r"\s", "", str(code or ""))
+    if not secret or not re.fullmatch(r"\d{6}", code):
+        return None
+    now, found = int(time.time() // 30), None
+    for step in (now - 1, now, now + 1):
+        if hmac.compare_digest(totp_code(secret, step), code) and step > last_step and (found is None or step > found):
+            found = step
+    return found
+
+
+def totp_active():
+    return bool(get_setting("auth_totp_secret"))
+
+
+def totp_verify_login(code):
+    """Prüft den Code gegen das aktive Geheimnis und verbraucht den Zeitschritt (keine Wiederverwendung)."""
+    with TOTP_LOCK:
+        step = totp_match(get_setting("auth_totp_secret"), code, int(get_setting("auth_totp_last", "-1") or -1))
+        if step is None:
+            return False
+        set_setting("auth_totp_last", str(step))
+        return True
+
+
+def totp_uri(user, secret):
+    label = "Finanz-Dashboard:" + urllib.parse.quote(user or "", safe="")
+    return f"otpauth://totp/{label}?secret={secret}&issuer=Finanz-Dashboard&digits=6&period=30"
+
+
+def totp_off():
+    for k in ("auth_totp_secret", "auth_totp_pending", "auth_totp_last"):
+        set_setting(k, None)
+
+
+# --- Wiederherstellungscode (nur als PBKDF2-Hash gespeichert)
+RECOVERY_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"   # ohne 0/O/1/I/L
+
+
+def recovery_norm(code):
+    return re.sub(r"[^A-Z0-9]", "", str(code or "").upper())
+
+
+def recovery_new():
+    raw = "".join(secrets.choice(RECOVERY_ALPHABET) for _ in range(25))
+    set_setting("auth_recovery_hash", hash_pw(raw))
+    return "-".join(raw[i:i + 5] for i in range(0, 25, 5))
+
+
+def recovery_check(code):
+    stored = get_setting("auth_recovery_hash")
+    norm = recovery_norm(code)
+    return bool(stored) and len(norm) == 25 and verify_pw(norm, stored)
+
+
 def list_portfolios():
     with DB_LOCK, db() as con:
         return [dict(r) for r in con.execute(
@@ -408,6 +511,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
         CREATE TABLE IF NOT EXISTS sessions (
             token_hash TEXT PRIMARY KEY, user TEXT, created REAL, expires REAL
+        );
+        CREATE TABLE IF NOT EXISTS auth_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, event TEXT, ip TEXT, detail TEXT
         );
         CREATE TABLE IF NOT EXISTS price_meta (
             ticker TEXT PRIMARY KEY, currency TEXT, fetched_at REAL, error TEXT
@@ -1599,7 +1705,29 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(n) if n else b"{}"
         return json.loads(raw.decode("utf-8") or "{}")
 
-    PUBLIC = {"/api/auth/status", "/api/login", "/api/setup", "/api/health"}
+    PUBLIC = {"/api/auth/status", "/api/login", "/api/setup", "/api/health", "/api/recovery"}
+
+    def _log(self, event):
+        if event == "login_blocked":     # während einer Sperre nur ein Eintrag pro Sperrfenster (kein Verdrängen)
+            ip, now = self.client_address[0], time.time()
+            with FAILED_LOCK:
+                if now - BLOCK_LOGGED.get(ip, 0) < FAIL_WINDOW:
+                    return
+                BLOCK_LOGGED[ip] = now
+        log_auth(event, self.client_address[0], self.headers.get("User-Agent", ""))
+
+    def _fail(self, status, msg, event=None):
+        """Fehlversuch: zählt zur Sperre (5 in 15 Min.), optional ins Protokoll, kurze Verzögerung."""
+        self._register_fail()
+        if event:
+            self._log(event)
+        time.sleep(1)
+        return self._send(status, {"error": msg})
+
+    def _new_session_reply(self, user, extra_body=None):
+        token = create_session(user)
+        return self._send(200, {"ok": True, **(extra_body or {})},
+                          extra={"Set-Cookie": self._cookie(token, SESSION_DAYS * 86400)})
 
     def _guard(self, path):
         if self.command in ("POST", "PUT", "DELETE"):
@@ -1632,23 +1760,54 @@ class Handler(BaseHTTPRequestHandler):
             check_new_password(body.get("password"))
             set_setting("auth_user", user)
             set_setting("auth_hash", hash_pw(body["password"]))
+            code = recovery_new()
             if body.get("lang") in LANGS:
                 set_setting("lang", body["lang"])
             token = create_session(user)
-            return self._send(200, {"ok": True, "user": user},
+            self._log("setup")
+            return self._send(200, {"ok": True, "user": user, "recovery_code": code},
                               extra={"Set-Cookie": self._cookie(token, SESSION_DAYS * 86400)})
         if path == "/api/login":
             if self._blocked():
+                self._log("login_blocked")
                 return self._send(429, {"error": "Zu viele Fehlversuche – bitte 15 Minuten warten."})
             user = (body.get("username") or "").strip()
             ok = auth_configured() and hmac.compare_digest(user.lower(), (get_setting("auth_user") or "").lower()) \
                 and verify_pw(body.get("password") or "", get_setting("auth_hash"))
             if not ok:
                 self._register_fail()
+                self._log("login_fail")
                 time.sleep(1)
                 return self._send(401, {"error": "Benutzername oder Passwort falsch."})
+            if totp_active():
+                if not str(body.get("code") or "").strip():
+                    return self._send(401, {"error": "totp_required"})   # zählt nicht als Fehlversuch
+                if not totp_verify_login(body.get("code")):
+                    self._register_fail()
+                    self._log("totp_fail")
+                    time.sleep(1)
+                    return self._send(401, {"error": "Der Code aus der Authenticator-App ist falsch."})
             token = create_session(get_setting("auth_user"))
+            self._log("login_ok")
             return self._send(200, {"ok": True}, extra={"Set-Cookie": self._cookie(token, SESSION_DAYS * 86400)})
+        if path == "/api/recovery":
+            if self._blocked():
+                self._log("login_blocked")
+                return self._send(429, {"error": "Zu viele Fehlversuche – bitte 15 Minuten warten."})
+            if not auth_configured() or not recovery_check(body.get("code")):
+                self._register_fail()
+                self._log("recovery_fail")
+                time.sleep(1)
+                return self._send(401, {"error": "Der Wiederherstellungscode ist falsch."})
+            check_new_password(body.get("password"))
+            set_setting("auth_hash", hash_pw(body["password"]))
+            revoke_sessions()
+            totp_off()
+            code = recovery_new()
+            token = create_session(get_setting("auth_user"))
+            self._log("recovery_used")
+            return self._send(200, {"ok": True, "recovery_code": code},
+                              extra={"Set-Cookie": self._cookie(token, SESSION_DAYS * 86400)})
         return None
 
     # --- Routing
@@ -1677,11 +1836,17 @@ class Handler(BaseHTTPRequestHandler):
                     n_sess = con.execute("SELECT COUNT(*) FROM sessions WHERE expires > ?", (time.time(),)).fetchone()[0]
                     n_tx = con.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
                 return self._send(200, {"title": get_setting("title", "Portfolio"), "user": self.user, "base": BASE,
-                                        "currencies": CURRENCIES, "sessions": n_sess, "transactions": n_tx, "https": bool(TLS_CERT and TLS_KEY),
+                                        "currencies": CURRENCIES, "sessions": n_sess, "transactions": n_tx, "totp": totp_active(),
+                                        "totp_pending": bool(get_setting("auth_totp_pending")),
+                                        "recovery": bool(get_setting("auth_recovery_hash")), "https": bool(TLS_CERT and TLS_KEY),
                                         "price_ttl_h": round(PRICE_TTL / 3600, 1),
                                         "lang": get_lang(), "news": get_setting("news", "1") == "1",
                                         "local": {"data_dir": str(DATA_DIR), "version": APP_VERSION,
                                                   "starter": local_starter()} if LOCAL else None})
+            if path == "/api/auth/log":
+                with DB_LOCK, db() as con:
+                    r = con.execute("SELECT created FROM sessions WHERE token_hash=?", (_th(self._token() or ""),)).fetchone()
+                return self._send(200, auth_log_summary(r["created"] if r else None))
             if path == "/api/news":
                 if get_setting("news", "1") != "1":
                     return self._send(200, {"items": [], "enabled": False})
@@ -1728,10 +1893,41 @@ class Handler(BaseHTTPRequestHandler):
                     with DB_LOCK, db() as con:
                         con.execute("DELETE FROM sessions WHERE token_hash=?", (_th(tok),))
                 return self._send(200, {"ok": True}, extra={"Set-Cookie": self._cookie("", 0)})
+            if path in ("/api/account/password", "/api/account/totp/start", "/api/account/totp/confirm",
+                        "/api/account/totp/disable", "/api/account/recovery/new") and self._blocked():
+                return self._send(429, {"error": "Zu viele Fehlversuche – bitte 15 Minuten warten."})
+            if path in ("/api/account/password", "/api/account/totp/start", "/api/account/totp/disable", "/api/account/recovery/new"):
+                pw = body.get("current") if path == "/api/account/password" else body.get("password")
+                if not verify_pw(pw or "", get_setting("auth_hash")):
+                    return self._fail(403, "Das aktuelle Passwort ist falsch.", "password_fail")
+            if path == "/api/account/totp/start":
+                if totp_active():
+                    return self._send(409, {"error": "Die Zwei-Faktor-Anmeldung ist bereits eingeschaltet."})
+                secret = totp_new_secret()
+                set_setting("auth_totp_pending", secret)
+                return self._send(200, {"secret": secret, "uri": totp_uri(get_setting("auth_user"), secret)})
+            if path == "/api/account/totp/confirm":
+                pending = get_setting("auth_totp_pending")
+                with TOTP_LOCK:
+                    step = totp_match(pending, body.get("code"))
+                    if not pending or step is None:
+                        return self._fail(400, "Der Code aus der Authenticator-App ist falsch.")
+                    set_setting("auth_totp_secret", pending)
+                    set_setting("auth_totp_last", str(step))
+                    set_setting("auth_totp_pending", None)
+                self._log("totp_on")
+                return self._send(200, {"ok": True})
+            if path == "/api/account/totp/disable":
+                if not totp_active() or not totp_verify_login(body.get("code")):
+                    return self._fail(403, "Der Code aus der Authenticator-App ist falsch.", "totp_fail")
+                totp_off()
+                self._log("totp_off")
+                return self._send(200, {"ok": True})
+            if path == "/api/account/recovery/new":
+                code = recovery_new()
+                self._log("recovery_new")
+                return self._send(200, {"recovery_code": code})
             if path == "/api/account/password":
-                if not verify_pw(body.get("current") or "", get_setting("auth_hash")):
-                    time.sleep(1)
-                    return self._send(403, {"error": "Das aktuelle Passwort ist falsch."})
                 if body.get("new"):
                     check_new_password(body["new"])
                 user = (body.get("username") or "").strip()[:40]
@@ -1740,9 +1936,11 @@ class Handler(BaseHTTPRequestHandler):
                 if body.get("new"):
                     set_setting("auth_hash", hash_pw(body["new"]))
                     revoke_sessions(keep_token=self._token())
+                    self._log("password_changed")
                 return self._send(200, {"ok": True, "user": get_setting("auth_user")})
             if path == "/api/account/logout-others":
                 revoke_sessions(keep_token=self._token())
+                self._log("logout_others")
                 return self._send(200, {"ok": True})
             if path in ("/api/import/preview", "/api/import/commit"):
                 return self._import(body, commit=path.endswith("commit"))
@@ -2032,7 +2230,9 @@ def main():
     if "--reset-password" in sys.argv:
         set_setting("auth_hash", None)
         set_setting("auth_user", None)
+        totp_off()
         revoke_sessions()
+        log_auth("reset_cli", "lokal", "")
         print("Anmeldung zurückgesetzt. Beim nächsten Aufruf kann ein neues Passwort festgelegt werden.")
         return
     threading.Thread(target=background_refresher, daemon=True).start()
