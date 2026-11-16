@@ -25,6 +25,9 @@ tls/
 
 # Build-Artefakte
 *.zip
+build/
+dist/
+*.spec
 __pycache__/
 *.pyc
 .venv/

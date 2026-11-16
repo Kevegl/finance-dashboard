@@ -35,10 +35,21 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 HEALTH_WAIT = 45
+FROZEN = getattr(sys, "frozen", False)     # .exe (Windows) bzw. .app (macOS), gebaut mit PyInstaller
 
 
 def serve(app_dir):
-    """Kindprozess-Modus (für die spätere .exe/App, wo es kein separates python gibt)."""
+    """Kindprozess-Modus der .exe/App: startet server.py aus app_dir mit dem eingebauten Python."""
+    if FROZEN:
+        # Module zuerst aus app_dir laden (aktualisierte Version), erst danach aus dem Paket
+        import importlib.machinery
+        sys.meta_path.insert(0, importlib.machinery.PathFinder)
+        if sys.stdout is None and os.environ.get("FD_DATA_DIR"):   # ohne Konsole: ins Protokoll schreiben
+            try:
+                f = open(Path(os.environ["FD_DATA_DIR"], "local", "server.log"), "a", encoding="utf-8", buffering=1)  # noqa: SIM115
+                sys.stdout = sys.stderr = f
+            except OSError:
+                pass
     sys.path.insert(0, str(app_dir))
     sys.argv = [str(Path(app_dir, "server.py"))]
     runpy.run_path(str(Path(app_dir, "server.py")), run_name="__main__")
@@ -50,11 +61,30 @@ if len(sys.argv) >= 3 and sys.argv[1] == "--serve":
 
 import local_update as lu  # noqa: E402  (liegt neben dieser Datei)
 
-BUNDLE = Path(os.environ.get("FD_BUNDLE_APP") or HERE)   # mitgelieferte Version (entpackter Download)
+# mitgelieferte Version: entpackter Download bzw. der Ordner app/ im Paket der .exe/App
+BUNDLE = Path(os.environ.get("FD_BUNDLE_APP") or (Path(getattr(sys, "_MEIPASS", HERE)) / "app" if FROZEN else HERE))
 
 
 def say(de, en=None):
     print(de if not en else f"{de}\n  {en}", flush=True)
+
+
+def fail(de, en):
+    """Fehlermeldung – bei der .exe/App zusätzlich als Fenster, weil es dort keine Konsole gibt."""
+    say("✗ " + de, en)
+    if not FROZEN:
+        return
+    text = f"{de}\n\n{en}"
+    try:
+        if sys.platform.startswith("win"):
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, text, "Finanz-Dashboard", 0x10)
+        elif sys.platform == "darwin":
+            esc = text.replace("\\", "\\\\").replace('"', '\\"')
+            subprocess.run(["osascript", "-e", f'display alert "Finanz-Dashboard" message "{esc}" as critical'],
+                           timeout=300, check=False)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 class Launcher:
@@ -213,15 +243,15 @@ class Launcher:
                 webbrowser.open(self.url)
             return 0
         if not self.port_free():
-            say(f"✗ Port {self.port} ist von einem anderen Programm belegt. Anderen Port wählen, z.B. FD_PORT=8766.",
-                f"Port {self.port} is used by another program. Choose another one, e.g. FD_PORT=8766.")
+            fail(f"Port {self.port} ist von einem anderen Programm belegt. Anderen Port wählen, z.B. FD_PORT=8766.",
+                 f"Port {self.port} is used by another program. Choose another one, e.g. FD_PORT=8766.")
             return 1
         try:
             self.data.mkdir(parents=True, exist_ok=True)
             if os.name == "posix":
                 os.chmod(self.data, 0o700)
         except OSError as e:
-            say(f"✗ Datenordner kann nicht angelegt werden: {e}", f"Cannot create data folder: {e}")
+            fail(f"Datenordner kann nicht angelegt werden: {e}", f"Cannot create data folder: {e}")
             return 1
         say("")
         say("  Finanz-Dashboard")
@@ -239,8 +269,8 @@ class Launcher:
                 if first:
                     if not self.wait_healthy():
                         if self.child.poll() is None:
-                            say("✗ Das Dashboard antwortet nicht.", "The dashboard does not respond.")
                             self.stop_child()
+                        fail("Das Dashboard startet nicht.", "The dashboard does not start.")
                         return 1
                     if open_browser:
                         webbrowser.open(self.url)
@@ -254,15 +284,32 @@ class Launcher:
                 continue
             crashes = [t for t in crashes if time.time() - t < 120] + [time.time()]
             if len(crashes) >= 3:
-                say(f"✗ Das Dashboard ist mehrfach abgestürzt (Code {code}).",
-                    f"The dashboard crashed repeatedly (code {code}).")
+                fail(f"Das Dashboard ist mehrfach abgestürzt (Code {code}).",
+                     f"The dashboard crashed repeatedly (code {code}).")
                 return 1
             say(f"Das Dashboard wurde unerwartet beendet (Code {code}) – starte neu …",
                 f"The dashboard stopped unexpectedly (code {code}) – restarting …")
             time.sleep(2)
 
 
+def log_to_file():
+    """Die .exe/App hat kein Konsolenfenster: Ausgaben in local/launcher.log im Datenordner schreiben."""
+    try:
+        d = lu.local_dir(lu.default_data_dir())
+        d.mkdir(parents=True, exist_ok=True)
+        log = d / "launcher.log"
+        if log.is_file() and log.stat().st_size > 1024 * 1024:
+            log.replace(d / "launcher.log.1")
+        f = open(log, "a", encoding="utf-8", buffering=1)  # noqa: SIM115 (bleibt bis Programmende offen)
+        sys.stdout = sys.stderr = f
+        print(f"\n--- {time.strftime('%Y-%m-%d %H:%M:%S')} ---")
+    except OSError:
+        pass
+
+
 def main():
+    if FROZEN:
+        log_to_file()
     launcher = Launcher()
     if launcher.delegate():
         return 0
