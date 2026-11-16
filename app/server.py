@@ -71,6 +71,14 @@ LOCAL = os.environ.get("FD_LOCAL") == "1"
 DOCKER = not LOCAL and os.environ.get("FD_DOCKER") == "1"
 APP_VERSION = local_update.norm_version(os.environ.get("FD_APP_VERSION", "")) or local_update.app_version(HERE)
 BUNDLED_VERSION = local_update.norm_version(os.environ.get("FD_BUNDLED_VERSION", ""))
+
+
+def local_starter():
+    """Womit der Benutzer das Dashboard wieder öffnet (Text nach «Dashboard beenden»)."""
+    win, mac = sys.platform.startswith("win"), sys.platform == "darwin"
+    if getattr(sys, "frozen", False):          # .exe/App: der Server läuft im selben Programm
+        return "FinanzDashboard.exe" if win else "FinanzDashboard.app" if mac else "FinanzDashboard"
+    return "start.bat" if win else "start.command" if mac else "start.sh"
 TLS_CERT = None if LOCAL else os.environ.get("FD_CERT")
 TLS_KEY = None if LOCAL else os.environ.get("FD_KEY")
 FAILED = {}            # IP -> [Zeitpunkte fehlgeschlagener Anmeldungen]
@@ -1672,7 +1680,8 @@ class Handler(BaseHTTPRequestHandler):
                                         "currencies": CURRENCIES, "sessions": n_sess, "transactions": n_tx, "https": bool(TLS_CERT and TLS_KEY),
                                         "price_ttl_h": round(PRICE_TTL / 3600, 1),
                                         "lang": get_lang(), "news": get_setting("news", "1") == "1",
-                                        "local": {"data_dir": str(DATA_DIR), "version": APP_VERSION} if LOCAL else None})
+                                        "local": {"data_dir": str(DATA_DIR), "version": APP_VERSION,
+                                                  "starter": local_starter()} if LOCAL else None})
             if path == "/api/news":
                 if get_setting("news", "1") != "1":
                     return self._send(200, {"items": [], "enabled": False})

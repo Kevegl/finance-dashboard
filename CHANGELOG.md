@@ -9,6 +9,8 @@ Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHu
 - Windows: «GitHub nicht erreichbar: CERTIFICATE_VERIFY_FAILED» bei der Update-Prüfung. Fehlt im
   Windows-Zertifikatsspeicher ein Stammzertifikat, lässt das Dashboard Windows es jetzt automatisch ergänzen und
   versucht es erneut. Das gilt auch für Kurse, News und Steuerfüsse.
+- Nach «Dashboard beenden» nennt die Seite das passende Programm zum erneuten Öffnen (`FinanzDashboard.exe`,
+  `FinanzDashboard.app` bzw. das Startskript) statt aller drei Startskripte.
 
 **Update:** *Einstellungen → Updates → Jetzt aktualisieren*. Erscheint unter Windows noch die Zertifikatsmeldung,
 öffne einmal https://api.github.com in Edge und klicke danach auf *Nach Updates suchen*.

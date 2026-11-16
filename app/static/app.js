@@ -875,6 +875,7 @@ async function loadSettings() {
       `${s.sessions} active ${s.sessions === 1 ? "session" : "sessions"} (signed-in browsers/devices). Sessions expire after 30 days.`);
     loadUpdate(true).then(() => { if (updWaiting() || (upd.st && upd.st.busy)) { upd.since = upd.since || Date.now(); updPoll(); } });
     $("#localCard").hidden = !s.local;
+    state.localStarter = s.local ? s.local.starter : null;
     if (s.local) $("#setLocal").textContent = L(
       `Läuft lokal auf diesem Computer (nur hier erreichbar) · Version ${s.local.version || "–"} · Daten in ${s.local.data_dir}`,
       `Running locally on this computer (reachable only here) · version ${s.local.version || "–"} · data in ${s.local.data_dir}`);
@@ -934,6 +935,9 @@ $("#btnQuit").onclick = async () => {
   try {
     await api("/api/local/quit", { method: "POST" });
     for (const d of document.querySelectorAll("dialog[open]")) d.close();
+    const st = state.localStarter ? `<code>${esc(state.localStarter)}</code>` : L("das Startprogramm", "the start program");
+    $("#quitInfo").innerHTML = L(`Du kannst dieses Browserfenster jetzt schliessen. Deine Daten sind gespeichert. Zum erneuten Öffnen ${st} starten.`,
+      `You can close this browser window now. Your data is saved. To open the dashboard again, start ${st}.`);
     $("#topbar").hidden = true; $("#app").hidden = true; $("#authView").hidden = true; $("#quitView").hidden = false;
     document.title = L("Dashboard beendet", "Dashboard closed");
   } catch (e) { toast(e.message); }

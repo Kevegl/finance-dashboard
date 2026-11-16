@@ -162,7 +162,6 @@ const EN = {
 
 const EN_HTML = {
   updUnavailable: "Updates via the dashboard are only available if it was installed with <code>git clone</code>. See the README for instructions.",
-  quitInfo: "You can close this browser window now. Your data is saved. To open the dashboard again, run the start program (<code>start.bat</code>, <code>start.command</code> or <code>start.sh</code>).",
   updDocker: "In Docker the dashboard is updated with a new image: <code>docker compose pull &amp;&amp; docker compose up -d</code> (or automatically with Watchtower). Your data in the volume is kept.",
   updHint: "The dashboard checks for a new version automatically every day. Nothing is installed until you click “Update now”. Your data stays unchanged; if the dashboard does not start after the update, the previous version is restored automatically.",
   backupInfo: "The backup contains <b>all portfolios</b>, transactions, ticker settings and the stored price history – but not your password. Keep the file safe, it contains your financial data.",
