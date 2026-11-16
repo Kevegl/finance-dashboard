@@ -505,3 +505,4 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); marg
 }
 .plan-table td { white-space: normal; }
 .plan-table td.num { white-space: nowrap; vertical-align: top; }
+.plan-a3-tabs { margin-bottom: 12px; }

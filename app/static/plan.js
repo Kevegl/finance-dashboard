@@ -44,7 +44,7 @@ const PLAN_DEFAULTS = {
   canton: "ZH", civil: "single", kids: 0, income: 85000, muni: 119, church: 0, marg: "",
   age: 35, pk: true, earned: 100000, buyIn: 0, buyYears: 3,
   spend: 60000, save: 20000, a3full: true, ret: 4, swr: 3.5, fireAge: 55, ahv: 28000, pkRente: 18000,
-  wealthFree: "", wealth3a: "", done: {}, cat: "all", hideDone: false,
+  wealthFree: "", wealth3a: "", pf3a: "cmp", done: {}, cat: "all", hideDone: false,
 };
 
 const plan = { P: null, dash: null, saveT: null, loading: false };
@@ -108,8 +108,14 @@ function wealthNow() {
   const P = plan.P, d = plan.dash || {};
   return {
     free: P.wealthFree !== "" ? nv(P.wealthFree) : (d.free || 0),
-    p3: P.wealth3a !== "" ? nv(P.wealth3a) : (d.p3 || 0),
+    p3: P.wealth3a !== "" ? nv(P.wealth3a) : sel3a().reduce((a, x) => a + x.value, 0),
   };
+}
+/* Gewählte 3a-Portfolios: eines oder (Vergleich) alle */
+function sel3a() {
+  const list = (plan.dash && plan.dash.pf3a) || [];
+  const one = list.find((x) => String(x.id) === String(plan.P.pf3a));
+  return one ? [one] : list;
 }
 /* Jahresweise Simulation in heutiger Kaufkraft (reale Rendite), Steuern vereinfacht ignoriert */
 function simulate(fireAge) {
@@ -344,19 +350,21 @@ async function loadPlan() {
 async function loadPlanDash() {
   const pfs = await api("/api/portfolios");
   const year = String(new Date().getFullYear());
-  const out = { free: 0, p3: 0, dep3a: 0, has3a: false, base: "CHF", count: pfs.length };
+  const out = { free: 0, pf3a: [], base: "CHF", count: pfs.length };
   await Promise.all(pfs.map(async (p) => {
     const s = await api(`/api/summary?p=${p.id}`).catch(() => null);
     if (!s) return;
     out.base = s.base;
     const v = s.kpis.value || 0;
     if (p.kind === "3a") {
-      out.p3 += v; out.has3a = true;
+      const x = { id: p.id, name: p.name, sort: pfs.indexOf(p), value: v, dep: 0 };
       const txs = await api(`/api/transactions?p=${p.id}`).catch(() => []);
       for (const t of txs) if (t.type === "deposit" && (t.date || "").startsWith(year))
-        out.dep3a += Math.abs(t.total || (t.quantity || 0) * (t.price || 0));
+        x.dep += Math.abs(t.total || (t.quantity || 0) * (t.price || 0));
+      out.pf3a.push(x);
     } else out.free += v;
   }));
+  out.pf3a.sort((a, b) => a.sort - b.sort);
   return out;
 }
 function savePlan() {
@@ -430,7 +438,7 @@ function renderPlan() {
         ${field("ahv", L("Erwartete AHV-Rente pro Jahr (CHF)", "Expected AHV pension per year (CHF)"), { amt: true, hint: L(`Maximum Einzelperson ca. ${num(CHV.ahvMax, 0)}`, `Maximum single about ${num(CHV.ahvMax, 0)}`) })}
         ${field("pkRente", L("Erwartete PK-Rente pro Jahr (CHF)", "Expected pension fund annuity (CHF)"), { amt: true, hint: L("laut Vorsorgeausweis; bei frühem Ausstieg tiefer", "per pension certificate; lower if you quit early") })}
         ${field("wealthFree", L("Freies Vermögen (CHF)", "Free assets (CHF)"), { amt: true, ph: L("aus Dashboard", "from dashboard"), hint: L("leer = Summe der normalen Portfolios", "empty = sum of standard portfolios") })}
-        ${field("wealth3a", L("Säule-3a-Guthaben (CHF)", "Pillar 3a balance (CHF)"), { amt: true, ph: L("aus Dashboard", "from dashboard"), hint: L("leer = Summe der 3a-Portfolios", "empty = sum of 3a portfolios") })}
+        ${field("wealth3a", L("Säule-3a-Guthaben (CHF)", "Pillar 3a balance (CHF)"), { amt: true, ph: L("aus Dashboard", "from dashboard"), hint: L("leer = gewähltes 3a-Portfolio (beim Vergleich die Summe)", "empty = selected 3a portfolio (sum when comparing)") })}
         ${field("a3full", L("Bis zum Ausstieg jedes Jahr 3a voll einzahlen", "Max out 3a every year until quitting"), { check: true })}
       </form>
     </article>
@@ -484,16 +492,28 @@ function renderPlanResults() {
 }
 
 function renderDeadlines(c) {
-  const d = plan.dash, box = $("#plA3");
-  if (d && d.has3a) {
-    const pct = Math.min(100, d.dep3a / c.a3 * 100), rest = Math.max(0, c.a3 - d.dep3a);
-    box.innerHTML = `<div class="plan-a3">
-      <div class="plan-a3-head"><b>${L(`Säule 3a ${new Date().getFullYear()}`, `Pillar 3a ${new Date().getFullYear()}`)}</b>
-        <span>${chf(d.dep3a)} / ${chf(c.a3)}</span></div>
-      <div class="plan-bar"><i style="width:${pct.toFixed(1)}%"></i></div>
-      <p class="hint">${rest > 0 ? L(`Noch ${chf(rest)} einzahlbar – spart ca. ${chf(saving(c.inc, rest))} Steuern.`, `${chf(rest)} still possible – saves about ${chf(saving(c.inc, rest))} in tax.`)
-        : L("Maximum erreicht – allenfalls Lücken aus Vorjahren nachzahlen.", "Maximum reached – consider catching up on earlier gaps.")}
-        ${L("Gezählt werden Einzahlungen in deinen 3a-Portfolios.", "Counts deposits in your 3a portfolios.")}</p></div>`;
+  const d = plan.dash, box = $("#plA3"), list = (d && d.pf3a) || [];
+  if (list.length) {
+    const year = new Date().getFullYear(), cmp = list.length > 1 && sel3a().length > 1;
+    const tabs = list.length > 1 ? `<div class="plan-chips plan-a3-tabs" role="tablist" aria-label="${L("3a-Portfolio wählen", "Choose 3a portfolio")}">
+      ${[["cmp", L("Vergleich", "Compare")], ...list.map((x) => [String(x.id), esc(x.name)])].map(([k, t]) => {
+        const on = k === "cmp" ? cmp : !cmp && String(sel3a()[0].id) === k;
+        return `<button role="tab" data-pf3a="${k}" class="${on ? "on" : ""}" aria-selected="${on}">${t}</button>`;
+      }).join("")}</div>` : "";
+    const row = (x) => {
+      const pct = Math.min(100, x.dep / c.a3 * 100), rest = Math.max(0, c.a3 - x.dep), over = x.dep - c.a3;
+      return `<div class="plan-a3">
+        <div class="plan-a3-head"><b>${esc(x.name)} · ${year}</b><span>${chf(x.dep)} / ${chf(c.a3)}</span></div>
+        <div class="plan-bar"><i style="width:${pct.toFixed(1)}%"></i></div>
+        <p class="hint">${L(`Guthaben ${chf(x.value)}`, `Balance ${chf(x.value)}`)} · ${rest > 0
+          ? L(`noch ${chf(rest)} einzahlbar – spart ca. ${chf(saving(c.inc, rest))} Steuern.`, `${chf(rest)} still possible – saves about ${chf(saving(c.inc, rest))} in tax.`)
+          : over > 1 ? L(`${chf(over)} über dem Maximum – Einzahlungen prüfen (Nachzahlung für Lückenjahre oder Fondswechsel als Einzahlung erfasst?).`, `${chf(over)} above the maximum – check deposits (catch-up for gap years or a fund switch recorded as deposit?).`)
+          : L("Maximum erreicht – allenfalls Lücken aus Vorjahren nachzahlen.", "Maximum reached – consider catching up on earlier gaps.")}</p></div>`;
+    };
+    box.innerHTML = tabs + sel3a().map(row).join("") + (cmp ? `<p class="hint plan-a3">${L(
+      `Jedes Konto wird einzeln gegen sein eigenes Maximum gerechnet (${chf(c.a3)} gemäss deinem Profil). Die Steuerersparnis ist mit deinem Einkommen geschätzt; für den FIRE-Rechner zählt hier die Summe von ${chf(sel3a().reduce((a, x) => a + x.value, 0))}.`,
+      `Each account is checked separately against its own maximum (${chf(c.a3)} per your profile). Tax savings are estimated with your income; the FIRE calculator uses the total of ${chf(sel3a().reduce((a, x) => a + x.value, 0))}.`)}</p>` : "");
+    box.querySelectorAll("[data-pf3a]").forEach((b) => (b.onclick = () => { plan.P.pf3a = b.dataset.pf3a; renderPlanResults(); savePlan(); }));
   } else box.innerHTML = d ? `<p class="hint plan-a3">${L("Lege ein Portfolio vom Typ „Säule 3a“ an und importiere die Einzahlungen, dann siehst du hier, wie viel du dieses Jahr noch einzahlen kannst.",
     "Create a portfolio of type “Pillar 3a” and import the deposits to see how much you can still pay in this year.")}</p>` : "";
   $("#plDeadlines").innerHTML = nextDeadlines().map((x) => `<li class="${x.days <= 30 ? "soon" : ""}">
