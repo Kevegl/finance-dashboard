@@ -11,6 +11,8 @@ Umgebungsvariablen:
   FD_CERT/FD_KEY                        – Pfad zu TLS-Zertifikat/Schlüssel -> HTTPS
   FD_PRICE_TTL   (Standard 14400 s)     – wie oft Kurse automatisch aktualisiert werden
   FD_REPO_DIR                           – Git-Repository der Installation (setzt install.sh) -> Updates im Dashboard
+  FD_LOCAL=1                            – lokaler Betrieb über app/launcher.py (nur 127.0.0.1, ohne TLS,
+                                          Updates über GitHub Releases, «Dashboard beenden»)
 """
 import hashlib
 import csv
@@ -37,6 +39,7 @@ import subprocess
 import zipfile
 
 import importers
+import local_update
 
 TX_TYPES = ("buy", "sell", "dividend", "tax", "interest", "fee", "deposit", "withdrawal", "transfer")
 FLOW_TYPES = ("deposit", "withdrawal", "transfer")
@@ -62,8 +65,12 @@ CURRENCIES = ["CHF", "EUR", "USD", "GBP", "JPY", "CAD", "AUD", "SEK", "NOK", "DK
 SESSION_DAYS = 30
 COOKIE = "fd_session"
 MIN_PW = 8
-TLS_CERT = os.environ.get("FD_CERT")
-TLS_KEY = os.environ.get("FD_KEY")
+# Lokaler Betrieb (Startprogramm launcher.py): nur auf diesem Computer, Updates über GitHub Releases
+LOCAL = os.environ.get("FD_LOCAL") == "1"
+APP_VERSION = local_update.norm_version(os.environ.get("FD_APP_VERSION", "")) or local_update.app_version(HERE)
+BUNDLED_VERSION = local_update.norm_version(os.environ.get("FD_BUNDLED_VERSION", ""))
+TLS_CERT = None if LOCAL else os.environ.get("FD_CERT")
+TLS_KEY = None if LOCAL else os.environ.get("FD_KEY")
 FAILED = {}            # IP -> [Zeitpunkte fehlgeschlagener Anmeldungen]
 FAILED_LOCK = threading.Lock()
 MAX_FAILS, FAIL_WINDOW = 5, 900   # 5 Fehlversuche in 15 Min. -> 15 Min. gesperrt
@@ -1393,8 +1400,75 @@ def parse_uploaded_files(files):
 # HTTP
 # --------------------------------------------------------------------------
 
+LOCAL_UPD = {"thread": None}
+HTTPD = {"server": None, "exit": 0}
+
+
+def request_exit(code):
+    """Beendet den Server nach der laufenden Antwort (nur lokaler Betrieb)."""
+    HTTPD["exit"] = code
+    if HTTPD["server"]:
+        threading.Timer(0.5, HTTPD["server"].shutdown).start()
+
+
+def local_update_busy():
+    t = LOCAL_UPD["thread"]
+    return bool(t and t.is_alive())
+
+
+def local_update_status():
+    st = local_update.read_status(DATA_DIR)
+    busy = st.get("state") in ("checking", "updating", "rolling_back")
+    if busy and not local_update_busy():
+        # Nach einem Neustart läuft hier kein Vorgang mehr -> unterbrochen
+        busy = False
+        st.update(state="error", message="Der letzte Lauf wurde unterbrochen.")
+    cur = st.get("current") or {}
+    if cur.get("commit") != APP_VERSION:
+        st["current"] = local_update.version_info(APP_VERSION)
+    mine = local_update.parse_version(APP_VERSION) or (0,)
+    st["commits"] = [c for c in st.get("commits") or [] if (local_update.parse_version(c.get("short")) or (0,)) > mine]
+    st["behind"] = len(st["commits"])
+    prev = (st.get("previous") or {}).get("commit")
+    if prev and prev == APP_VERSION:
+        st["previous"] = None
+    st.update(available=True, mode="release", branch="Releases", pending=False, busy=busy, ahead=0, dirty=False)
+    return st
+
+
+def local_request_update(action):
+    if local_update_busy():
+        raise ValueError("Es läuft bereits ein Update-Vorgang.")
+    rid = secrets.token_hex(8)
+
+    def work():
+        u = local_update.LocalUpdater(DATA_DIR, APP_VERSION, BUNDLED_VERSION)
+        if u.run(action, rid):
+            request_exit(local_update.RESTART_CODE)
+
+    LOCAL_UPD["thread"] = threading.Thread(target=work, daemon=True)
+    LOCAL_UPD["thread"].start()
+    return rid
+
+
+def local_update_checker():
+    """Prüft im lokalen Betrieb einmal täglich, ob es ein neues Release gibt (installiert nichts)."""
+    time.sleep(30)
+    while True:
+        try:
+            last = local_update.read_status(DATA_DIR).get("last_check")
+            age = time.time() - datetime.fromisoformat(last).timestamp() if last else 1e9
+            if age > 20 * 3600 and not local_update_busy():
+                local_request_update("check")
+        except Exception as e:  # noqa: BLE001
+            print(f"Update-Prüfung: {e}", flush=True)
+        time.sleep(3600)
+
+
 def update_status():
     """Stand des Update-Dienstes für die Einstellungen (ohne Log, das gibt es separat)."""
+    if LOCAL:
+        return local_update_status()
     if not REPO_DIR:
         return {"available": False}
     try:
@@ -1420,6 +1494,8 @@ def update_status():
 def request_update(action):
     if action not in UPDATE_ACTIONS:
         raise ValueError("Unbekannte Aktion")
+    if LOCAL:
+        return local_request_update(action)
     if not REPO_DIR:
         raise ValueError("Updates über das Dashboard sind bei dieser Installation nicht verfügbar.")
     rid = secrets.token_hex(8)
@@ -1575,7 +1651,7 @@ class Handler(BaseHTTPRequestHandler):
                         "FROM transactions WHERE portfolio_id=? ORDER BY date DESC, id DESC", (self._pid(),))]
                 return self._send(200, rows)
             if path == "/api/health":
-                return self._send(200, {"ok": True})
+                return self._send(200, {"ok": True, "app": "finance-dashboard", "local": LOCAL})
             if path == "/api/auth/status":
                 user = session_user(self._token()) if auth_configured() else None
                 return self._send(200, {"setup_required": not auth_configured(),
@@ -1588,7 +1664,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"title": get_setting("title", "Portfolio"), "user": self.user, "base": BASE,
                                         "currencies": CURRENCIES, "sessions": n_sess, "transactions": n_tx, "https": bool(TLS_CERT and TLS_KEY),
                                         "price_ttl_h": round(PRICE_TTL / 3600, 1),
-                                        "lang": get_lang(), "news": get_setting("news", "1") == "1"})
+                                        "lang": get_lang(), "news": get_setting("news", "1") == "1",
+                                        "local": {"data_dir": str(DATA_DIR), "version": APP_VERSION} if LOCAL else None})
             if path == "/api/news":
                 if get_setting("news", "1") != "1":
                     return self._send(200, {"items": [], "enabled": False})
@@ -1748,6 +1825,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, refresh_prices(force=True))
             if path == "/api/update/request":
                 return self._send(200, {"ok": True, "request_id": request_update(body.get("action"))})
+            if path == "/api/local/quit" and LOCAL:
+                request_exit(0)
+                return self._send(200, {"ok": True})
             return self._send(404, {"error": "nicht gefunden"})
         except importers.ImportErrorDetail as e:
             return self._send(422, {"error": str(e)})
@@ -1940,9 +2020,12 @@ def main():
         print("Anmeldung zurückgesetzt. Beim nächsten Aufruf kann ein neues Passwort festgelegt werden.")
         return
     threading.Thread(target=background_refresher, daemon=True).start()
-    host = os.environ.get("FD_HOST", "0.0.0.0")
-    port = int(os.environ.get("FD_PORT", "8080"))
+    if LOCAL:
+        threading.Thread(target=local_update_checker, daemon=True).start()
+    host = os.environ.get("FD_HOST", "127.0.0.1" if LOCAL else "0.0.0.0")
+    port = int(os.environ.get("FD_PORT", str(local_update.DEFAULT_PORT) if LOCAL else "8080"))
     httpd = Server((host, port), Handler)
+    HTTPD["server"] = httpd
     scheme = "http"
     if TLS_CERT and TLS_KEY:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -1953,8 +2036,15 @@ def main():
         scheme = "https"
     if not auth_configured():
         print("Ersteinrichtung: Dashboard im Browser öffnen und Benutzer + Passwort festlegen.")
-    print(f"Finanz-Dashboard läuft auf {scheme}://{host}:{port}  (Basiswährung {BASE}, Daten in {DATA_DIR})")
-    httpd.serve_forever()
+    ver = f"Version {APP_VERSION}, " if APP_VERSION else ""
+    print(f"Finanz-Dashboard läuft auf {scheme}://{host}:{port}  ({ver}Basiswährung {BASE}, Daten in {DATA_DIR})")
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        httpd.server_close()
+    sys.exit(HTTPD["exit"])
 
 
 if __name__ == "__main__":

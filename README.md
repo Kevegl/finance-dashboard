@@ -1,6 +1,7 @@
 # Finanz-Dashboard
 
-Schlankes, selbst gehostetes Portfolio-Dashboard für dein Proxmox-Homelab.
+Schlankes, selbst gehostetes Portfolio-Dashboard – lokal auf deinem Computer (Windows, macOS, Linux)
+oder auf einem eigenen Server bzw. im Proxmox-Homelab.
 Importiert CSV-Exporte von **Relai** (Bitcoin) und **Interactive Brokers** (ETFs/Aktien) sowie beliebige andere CSVs per Spalten-Zuordnung.
 
 - Keine externen Python-Pakete – nur Python 3 + SQLite
@@ -9,6 +10,49 @@ Importiert CSV-Exporte von **Relai** (Bitcoin) und **Interactive Brokers** (ETFs
 - Duplikat-Erkennung: dieselbe Datei (oder IBKR-Statement + Flex Query) kann mehrfach importiert werden
 - Hell/Dunkel-Modus, funktioniert auch auf dem Handy
 - Spartipps & Vorsorge: Steuer-Schätzung, 3a-Stand, FIRE-/Pensionsrechner und Fristen (Kanton Zürich)
+
+## Lokal nutzen (ohne Server)
+
+Für Windows, macOS und Linux, ohne Installation und ohne Administratorrechte. Das Dashboard läuft nur auf deinem
+Computer (`http://127.0.0.1:8765`) und ist im Netzwerk nicht erreichbar.
+
+1. **Python 3.9 oder neuer** installieren, falls noch nicht vorhanden:
+   [python.org/downloads](https://www.python.org/downloads/). Unter Windows dabei *Add python.exe to PATH* anhaken.
+   Unter Linux ist Python meist schon installiert.
+2. **Neueste Version herunterladen:** Auf GitHub unter *Releases* bei der obersten Version *Source code (zip)*
+   herunterladen und an einen beliebigen Ort entpacken, z.B. in *Dokumente*.
+3. **Starten** per Doppelklick:
+   - Windows: `start.bat`
+   - macOS: `start.command`. Beim ersten Mal *Rechtsklick → Öffnen*, weil die Datei aus dem Internet stammt.
+   - Linux: `./start.sh` im Terminal
+
+   Es öffnet sich ein kleines Fenster und danach der Browser. Beim ersten Aufruf legst du Benutzername und Passwort fest.
+
+**Beenden:** *Einstellungen → Programm → Dashboard beenden*, oder das Fenster des Startprogramms schliessen
+bzw. dort `Strg+C` drücken. Ein erneuter Doppelklick öffnet ein bereits laufendes Dashboard nur im Browser,
+statt es doppelt zu starten.
+
+**Deine Daten** liegen getrennt vom Programm im Benutzerprofil. Sie bleiben bei Updates erhalten, und der
+Download-Ordner kann jederzeit ersetzt werden:
+
+| System  | Datenordner |
+|---------|-------------|
+| Windows | `%LOCALAPPDATA%\FinanzDashboard` |
+| macOS   | `~/Library/Application Support/FinanzDashboard` |
+| Linux   | `~/.local/share/finanz-dashboard` |
+
+Mit der Umgebungsvariable `FD_DATA_DIR` lässt sich ein anderer Ordner wählen, mit `FD_PORT` ein anderer Port.
+Zusätzlich empfohlen: ab und zu unter *Einstellungen → Sicherung* eine Sicherung herunterladen.
+
+**Updates:** Unter *Einstellungen → Updates* prüft das Dashboard einmal täglich bei GitHub, ob es ein neues Release
+gibt. Installiert wird nur auf Klick: Das Dashboard lädt die neue Version in den Datenordner, startet neu und
+prüft, ob sie läuft. Startet sie nicht, kehrt es automatisch zur bisherigen Version zurück. Zusätzlich gibt es den
+Button *Vorherige Version wiederherstellen*. Lädst du später von Hand einen neueren Download herunter, wird
+automatisch dieser verwendet.
+
+**Passwort vergessen?** Im entpackten Ordner:
+`FD_DATA_DIR=<Datenordner> python3 app/server.py --reset-password`. Unter Windows zuerst
+`set FD_DATA_DIR=%LOCALAPPDATA%\FinanzDashboard` ausführen, danach `py app\server.py --reset-password`.
 
 ## Installation auf Proxmox (LXC)
 
@@ -56,7 +100,10 @@ Wurde das Dashboard per `git clone` installiert, richtet `install.sh` zusätzlic
 Unter *Einstellungen → Updates* siehst du dann die installierte Version, ob es eine neue gibt (mit Änderungsliste)
 und kannst sie per Klick installieren. Ein Punkt am Zahnrad zeigt an, dass ein Update bereitliegt.
 
-- **Tägliche Prüfung:** ein systemd-Timer prüft einmal am Tag, ob es neue Commits gibt. Installiert wird nur auf Klick.
+- **Tägliche Prüfung:** Ein systemd-Timer prüft einmal am Tag, ob es eine neue Version gibt. Installiert wird nur auf Klick.
+- **Kanal** (`FD_UPDATE_CHANNEL` in `/etc/finance-dashboard.env`): Mit `release` gibt es nur veröffentlichte
+  Versionen (Git-Tags `v1.2.3`). Das ist der Standard bei Neuinstallationen. Mit `main` ist jeder neue Commit ein
+  Update. Ohne Eintrag gilt `main`, so verhalten sich bestehende Installationen wie bisher.
 - **Sicherheit:** Das Dashboard läuft als eingeschränkter Benutzer und schreibt beim Klick nur eine Auftragsdatei.
   Ausgeführt wird sie vom root-Dienst `finance-dashboard-update`, der ausschliesslich `check`, `update` und `rollback`
   akzeptiert, nur Fast-Forward-Updates aus dem eigenen Repository holt und lokale Änderungen nie überschreibt.

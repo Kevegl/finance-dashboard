@@ -54,6 +54,15 @@
   </form>
 </section>
 
+<!-- Lokaler Betrieb: nach «Dashboard beenden» -->
+<section class="auth" id="quitView" hidden>
+  <div class="auth-card">
+    <span class="logo big" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <h2>Das Dashboard wurde beendet</h2>
+    <p class="hint" data-i18n-html="quitInfo">Du kannst dieses Browserfenster jetzt schliessen. Deine Daten sind gespeichert. Zum erneuten Öffnen das Startprogramm ausführen (<code>start.bat</code>, <code>start.command</code> oder <code>start.sh</code>).</p>
+  </div>
+</section>
+
 <main id="app" hidden>
 <div id="dashView" class="view">
   <section class="news" id="news" hidden aria-label="Neueste Nachrichten zu deinen Positionen">
@@ -213,6 +222,14 @@
     <div class="form-actions left">
       <button class="btn ghost" id="btnLogoutOthers">Alle anderen Geräte abmelden</button>
       <button class="btn ghost danger" id="btnLogout">Abmelden</button>
+    </div>
+  </article>
+
+  <article class="card settings-card" id="localCard" hidden>
+    <h3>Programm</h3>
+    <p class="hint" id="setLocal">–</p>
+    <div class="form-actions left">
+      <button class="btn ghost danger" id="btnQuit">Dashboard beenden</button>
     </div>
   </article>
 

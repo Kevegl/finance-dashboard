@@ -874,6 +874,10 @@ async function loadSettings() {
     $("#setSessions").textContent = L(`${s.sessions} aktive ${s.sessions === 1 ? "Sitzung" : "Sitzungen"} (angemeldete Browser/Geräte). Sitzungen laufen nach 30 Tagen ab.`,
       `${s.sessions} active ${s.sessions === 1 ? "session" : "sessions"} (signed-in browsers/devices). Sessions expire after 30 days.`);
     loadUpdate(true).then(() => { if (updWaiting() || (upd.st && upd.st.busy)) { upd.since = upd.since || Date.now(); updPoll(); } });
+    $("#localCard").hidden = !s.local;
+    if (s.local) $("#setLocal").textContent = L(
+      `Läuft lokal auf diesem Computer (nur hier erreichbar) · Version ${s.local.version || "–"} · Daten in ${s.local.data_dir}`,
+      `Running locally on this computer (reachable only here) · version ${s.local.version || "–"} · data in ${s.local.data_dir}`);
     $("#setData").textContent = L(`${s.transactions} Transaktionen gespeichert · Verbindung ${s.https ? "verschlüsselt (HTTPS)" : "unverschlüsselt (HTTP)"}.`,
       `${s.transactions} transactions stored · connection ${s.https ? "encrypted (HTTPS)" : "unencrypted (HTTP)"}.`);
   } catch (e) { toast(e.message); }
@@ -921,6 +925,18 @@ $("#btnLogout").onclick = async () => {
   await api("/api/logout", { method: "POST" }).catch(() => {});
   location.hash = ""; state.summary = null; state.txs = [];
   showAuth("login");
+};
+$("#btnQuit").onclick = async () => {
+  if (!(await confirmDialog(L("Dashboard beenden?", "Quit the dashboard?"),
+    L("Das Programm auf diesem Computer wird beendet. Deine Daten sind gespeichert. Zum erneuten Öffnen das Startprogramm ausführen.",
+      "The program on this computer will be closed. Your data is saved. Run the start program to open it again."),
+    L("Beenden", "Quit")))) return;
+  try {
+    await api("/api/local/quit", { method: "POST" });
+    for (const d of document.querySelectorAll("dialog[open]")) d.close();
+    $("#topbar").hidden = true; $("#app").hidden = true; $("#authView").hidden = true; $("#quitView").hidden = false;
+    document.title = L("Dashboard beendet", "Dashboard closed");
+  } catch (e) { toast(e.message); }
 };
 
 /* ---------- Portfolios ---------- */
@@ -1127,7 +1143,7 @@ function renderUpdate() {
   if (!st.available) return;
   const cur = st.current;
   $("#updCurrent").innerHTML = cur
-    ? `<code>${esc(cur.short)}</code> ${esc(cur.subject)}<small>${esc(updDate(cur.date))}${st.branch ? " · " + esc(st.branch) : ""}</small>`
+    ? `<code>${esc(cur.short)}</code> ${esc(cur.subject)}<small>${esc([cur.date && updDate(cur.date), st.branch].filter(Boolean).join(" · "))}</small>`
     : "–";
   const waiting = updWaiting(), busy = waiting || st.busy;
   const busyText = { check: L("Suche nach Updates …", "Checking for updates …"), update: L("Update wird installiert – das Dashboard startet gleich neu …", "Installing update – the dashboard will restart shortly …"),
