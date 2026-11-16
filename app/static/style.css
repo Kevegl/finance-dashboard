@@ -506,3 +506,11 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); marg
 .plan-table td { white-space: normal; }
 .plan-table td.num { white-space: nowrap; vertical-align: top; }
 .plan-a3-tabs { margin-bottom: 12px; }
+.plan-upload { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.plan-upload .hint { flex-basis: 100%; }
+.plan-x { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 0 0 6px; font-size: 12px; }
+.plan-x:hover { color: var(--down); }
+.plan-a3-cfg { margin-top: 6px; font-size: 13px; }
+.plan-a3-cfg summary { cursor: pointer; color: var(--ink-2); }
+.plan-a3-cfg summary .hint { margin-left: 6px; }
+.plan-a3-cfg .plan-form { margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--surface-2); }

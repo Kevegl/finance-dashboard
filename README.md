@@ -114,13 +114,19 @@ Der Container braucht dafür Internetzugang zu `query1.finance.yahoo.com`.
 - **Steuern sparen:** Schätzung von Einkommenssteuer, Grenzsteuersatz und Ersparnis durch 3a-Einzahlung,
   3a-Nachzahlung und PK-Einkauf (einmalig vs. gestaffelt). Den Grenzsteuersatz aus der eigenen Steuerrechnung kannst du
   direkt eintragen.
+- **Gemeindesteuerfüsse:** Im Profil die CSV der Gemeindesteuerfüsse des Kantonalen Steueramts hochladen
+  (`zh.ch/steuerfuesse`, das Jahr wird aus dem Dateinamen gelesen, mehrere Jahre möglich). Danach Wohngemeinde und
+  Konfession wählen; Gemeinden mit mehreren Steuerfüssen (Schul-/Kirchgemeinden) bieten eine Variantenauswahl.
+  Zusätzlich gibt es einen Vergleich mit den günstigsten und teuersten Gemeinden.
+- **Mehrere 3a-Konten:** z.B. eigenes und Partner-Konto einzeln anzeigen oder vergleichen; pro Konto lassen sich
+  PK-Anschluss, Erwerbseinkommen und steuerbares Einkommen festlegen.
 - **FIRE & Pensionierung:** FIRE-Zahl, frühestes Ausstiegsalter, Brücke bis 65 inkl. AHV-Beiträgen als
   Nichterwerbstätige und Rentenlücke. Das Vermögen wird aus den Portfolios übernommen (überschreibbar).
 - **Tipps & Tricks:** rund 45 Tipps zu Steuern, Vorsorge, Anlegen, Alltag, FIRE, Pensionierung und anstehenden
   Gesetzesänderungen – mit persönlichen Zahlen aus dem Profil und zum Abhaken.
 
 Das Profil wird auf dem Server gespeichert (in der Datenbank, also auch in der Sicherung). Alle Tarife sind
-vereinfachte Näherungen (Stand 2026) und ersetzen keine Beratung. Weitere Kantone lassen sich in `app/static/plan.js`
+Näherungen (Bundessteuer nach amtlichem Tarif 2026, Staatssteuer vereinfacht) und ersetzen keine Beratung. Weitere Kantone lassen sich in `app/static/plan.js`
 (`CANTONS`, `DEADLINES`, `TIPS` mit `canton`) ergänzen.
 
 ## Sprache & News-Ticker

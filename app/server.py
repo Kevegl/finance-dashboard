@@ -110,6 +110,47 @@ def set_setting(key, value):
             con.execute("INSERT OR REPLACE INTO settings(key,value) VALUES (?,?)", (key, value))
 
 
+def save_muni_rates(body):
+    """Steuerfüsse eines Jahres speichern oder löschen. rates: {Gemeinde: [[ohne Kirche, ref., kath., christkath.], …]}
+    (mehrere Einträge, wenn eine Gemeinde je nach Schulgemeinde/Kirchgemeinde verschiedene Steuerfüsse hat)."""
+    if not isinstance(body, dict):
+        raise ValueError("Ungültige Daten")
+    canton = str(body.get("canton") or "")
+    year = str(body.get("year") or "")
+    if not re.fullmatch(r"[A-Z]{2}", canton) or not re.fullmatch(r"20\d\d", year):
+        raise ValueError("Ungültige Daten")
+    try:
+        allr = json.loads(get_setting("muni_rates", "{}"))
+    except ValueError:
+        allr = {}
+    if not isinstance(allr, dict):
+        allr = {}
+    if body.get("delete"):
+        allr.get(canton, {}).pop(year, None)
+    else:
+        rates = body.get("rates")
+        if not isinstance(rates, dict) or not 0 < len(rates) <= 400:
+            raise ValueError("Keine Steuerfüsse gefunden")
+        clean = {}
+        for name, variants in rates.items():
+            if not isinstance(name, str) or not name.strip() or len(name) > 60 or not isinstance(variants, list):
+                raise ValueError("Ungültige Daten")
+            vs = []
+            for v in variants[:3]:
+                if not isinstance(v, list) or len(v) != 4:
+                    raise ValueError("Ungültige Daten")
+                vs.append([float(x) if isinstance(x, (int, float)) and 0 <= x <= 400 else None for x in v])
+            if not vs or vs[0][0] is None:
+                raise ValueError("Ungültige Daten")
+            clean[name.strip()] = vs
+        allr.setdefault(canton, {})[year] = clean
+        if len(allr[canton]) > 10:   # nur die letzten 10 Jahre behalten
+            for y in sorted(allr[canton])[:-10]:
+                del allr[canton][y]
+    set_setting("muni_rates", json.dumps(allr, ensure_ascii=False, separators=(",", ":")))
+    return {"ok": True, "years": sorted(allr.get(canton, {}))}
+
+
 # --------------------------------------------------------------------------
 # Anmeldung (Passwort-Hash PBKDF2-SHA256, Sitzungen per HttpOnly-Cookie)
 # --------------------------------------------------------------------------
@@ -1469,6 +1510,12 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError:
                     plan = {}
                 return self._send(200, plan if isinstance(plan, dict) else {})
+            if path == "/api/muni-rates":   # hochgeladene Gemeindesteuerfüsse {Kanton: {Jahr: {Gemeinde: [...]}}}
+                try:
+                    rates = json.loads(get_setting("muni_rates", "{}"))
+                except ValueError:
+                    rates = {}
+                return self._send(200, rates if isinstance(rates, dict) else {})
             if path == "/api/portfolios":
                 return self._send(200, list_portfolios())
             if path == "/api/backup":
@@ -1535,6 +1582,8 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Daten zu gross")
                 set_setting("plan", data)
                 return self._send(200, {"ok": True})
+            if path == "/api/muni-rates":
+                return self._send(200, save_muni_rates(body))
             if path == "/api/settings":
                 global BASE
                 title = (body.get("title") or "").strip()[:60] or "Portfolio"

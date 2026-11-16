@@ -16,12 +16,14 @@ const CHV = {
   ahvNe: [[350000, 530], [8850000, 26500]], // AHV-Beiträge Nichterwerbstätige (Vermögen → Beitrag), dazwischen linear genähert
 };
 
-/* Direkte Bundessteuer: [ab steuerbarem Einkommen, Grenzsatz in %], darüber pauschal 11.5 % (Näherung) */
+/* Direkte Bundessteuer 2026 (ESTV-Tabelle, Formular 58c): [ab Einkommen, Steuer an dieser Stelle, je weitere 100 CHF].
+   Restbeträge unter 100 CHF fallen weg; darüber hinaus höchstens 11.5 % des Einkommens. */
 const FED = {
-  single: [[0, 0], [15200, 0.77], [33200, 0.88], [43500, 2.64], [58000, 2.97], [76100, 5.94], [82000, 6.6],
-    [108800, 8.8], [141500, 11], [185000, 13.2]],
-  married: [[0, 0], [29700, 1], [53400, 2], [61300, 3], [79100, 4], [94900, 5], [108600, 6], [120500, 7],
-    [130500, 8], [138300, 9], [144200, 10], [148200, 11], [150300, 12], [152300, 13]],
+  single: [[15200, 0, 0.77], [33200, 138.60, 0.88], [43500, 229.20, 2.64], [58000, 612.00, 2.97], [76200, 1152.50, 5.94],
+    [82100, 1502.95, 6.6], [108900, 3271.75, 8.8], [141500, 6140.55, 11], [185100, 10936.55, 13.2]],
+  married: [[29700, 0, 1], [53400, 237, 2], [61300, 395, 3], [79100, 929, 4], [94900, 1561, 5], [108700, 2251, 6],
+    [120600, 2965, 7], [130500, 3658, 8], [138400, 4290, 9], [144300, 4821, 10], [148300, 5221, 11], [150400, 5452, 12],
+    [152400, 5692, 13]],
   flat: 11.5,
   child: 263,           // Elterntarif: Abzug vom Steuerbetrag pro Kind
 };
@@ -44,10 +46,10 @@ const PLAN_DEFAULTS = {
   canton: "ZH", civil: "single", kids: 0, income: 85000, muni: 119, church: 0, marg: "",
   age: 35, pk: true, earned: 100000, buyIn: 0, buyYears: 3,
   spend: 60000, save: 20000, a3full: true, ret: 4, swr: 3.5, fireAge: 55, ahv: 28000, pkRente: 18000,
-  wealthFree: "", wealth3a: "", pf3a: "cmp", done: {}, cat: "all", hideDone: false,
+  wealthFree: "", wealth3a: "", pf3a: "cmp", cfg3a: {}, gemeinde: "", gemVar: 0, konf: "none", taxYear: "", done: {}, cat: "all", hideDone: false,
 };
 
-const plan = { P: null, dash: null, saveT: null, loading: false };
+const plan = { P: null, dash: null, rates: {}, saveT: null, loading: false, open3a: new Set() };
 
 /* ---------- Hilfen ---------- */
 const chf = (v) => (state.hide ? `CHF ${HIDDEN}` : money(Math.round(v || 0), "CHF", { dec: 0 }));
@@ -66,20 +68,36 @@ function cantonSimple(inc, married) {
   return tax;
 }
 function fedTax(inc, married, kids) {
-  const br = FED[married ? "married" : "single"];
+  inc = Math.floor(Math.max(0, inc) / 100) * 100;
   let tax = 0;
-  for (let i = 0; i < br.length; i++) {
-    const lo = br[i][0], hi = br[i + 1] ? br[i + 1][0] : Infinity;
-    if (inc > lo) tax += (Math.min(inc, hi) - lo) * br[i][1] / 100;
+  for (const [from, base, per100] of FED[married ? "married" : "single"]) if (inc >= from) tax = base + (inc - from) * per100 / 100;
+  tax = Math.min(tax, inc * FED.flat / 100);
+  return Math.max(0, tax - kids * FED.child);
+}
+/* Hochgeladene Gemeindesteuerfüsse: gewähltes Steuerjahr oder das neueste */
+const KONF = [["none", "Keine / andere", "None / other"], ["ref", "Reformiert", "Reformed"], ["kath", "Römisch-katholisch", "Roman Catholic"], ["christkath", "Christkatholisch", "Christ Catholic"]];
+function muniTable() {
+  const t = (plan.rates || {})[plan.P.canton] || {}, years = Object.keys(t).sort();
+  if (!years.length) return null;
+  const year = years.includes(String(plan.P.taxYear)) ? String(plan.P.taxYear) : years[years.length - 1];
+  return { year, years, rows: t[year] };
+}
+function muniVariants(name = plan.P.gemeinde) { const t = muniTable(); return (t && name && t.rows[name]) || null; }
+/* Gemeinde- und Kirchensteuerfuss: aus der Tabelle, falls eine Gemeinde gewählt ist, sonst aus dem Profil */
+function rates(P = plan.P, name = P.gemeinde, variant = P.gemVar) {
+  const vs = muniVariants(name);
+  if (vs) {
+    const v = vs[Math.min(Math.max(0, nv(variant)), vs.length - 1)], k = KONF.findIndex((x) => x[0] === P.konf);
+    const base = v[0], withC = k > 0 && v[k] != null ? v[k] : base;
+    return { muni: base, church: Math.max(0, withC - base), csv: true };
   }
-  tax = Math.min(tax, inc * FED.flat / 100);   // ab dem Schwellenwert gilt der Pauschalsatz
-  return Math.max(0, tax - (tax > 0 ? kids * FED.child : 0));
+  return { muni: nv(P.muni, canton().muni), church: nv(P.church), csv: false };
 }
 /* Verheiratete und Alleinerziehende rechnen mit dem Verheiratetentarif */
-function taxes(inc, P = plan.P) {
+function taxes(inc, P = plan.P, r = rates(P)) {
   const married = P.civil !== "single";
   const simple = cantonSimple(inc, married);
-  const cant = simple * (canton().rate + nv(P.muni, canton().muni) + nv(P.church)) / 100;
+  const cant = simple * (canton().rate + r.muni + r.church) / 100;
   const fed = fedTax(inc, married, nv(P.kids));
   return { simple, cant, fed, total: cant + fed };
 }
@@ -88,10 +106,10 @@ function marginal(inc) {
   return Math.max(0, (taxes(inc).total - taxes(Math.max(0, inc - 1000)).total) / 1000);
 }
 /* Ersparnis eines Abzugs: mit eigenem Grenzsteuersatz (falls gesetzt) linear, sonst exakt über den Tarif */
-function saving(inc, ded) {
+function saving(inc, ded, own = true) {
   ded = Math.min(ded, inc);
   if (ded <= 0) return 0;
-  if (plan.P.marg !== "" && isFinite(Number(plan.P.marg))) return ded * Number(plan.P.marg) / 100;
+  if (own && plan.P.marg !== "" && isFinite(Number(plan.P.marg))) return ded * Number(plan.P.marg) / 100;
   return taxes(inc).total - taxes(inc - ded).total;
 }
 function a3Limit(P = plan.P) {
@@ -110,6 +128,15 @@ function wealthNow() {
     free: P.wealthFree !== "" ? nv(P.wealthFree) : (d.free || 0),
     p3: P.wealth3a !== "" ? nv(P.wealth3a) : sel3a().reduce((a, x) => a + x.value, 0),
   };
+}
+/* Einstellungen pro 3a-Konto (z.B. Partner/in), Vorgabe aus dem Profil */
+function cfg3a(id) {
+  const c = (plan.P.cfg3a || {})[id] || {};
+  return { pk: c.pk ?? plan.P.pk, earned: c.earned ?? plan.P.earned, income: c.income ?? "" };
+}
+function save3aFor(id, ded) {
+  const cf = cfg3a(id);
+  return cf.income === "" ? saving(nv(plan.P.income), ded) : saving(nv(cf.income), ded, false);
 }
 /* Gewählte 3a-Portfolios: eines oder (Vergleich) alle */
 function sel3a() {
@@ -210,8 +237,8 @@ const TIPS = [
     de: ["Krypto richtig deklarieren", "Bitcoin gehört ins Wertschriftenverzeichnis und unterliegt der Vermögenssteuer zum ESTV-Jahresendkurs. Private Kursgewinne sind steuerfrei, Staking- oder Mining-Erträge dagegen Einkommen. Kaufbelege (z.B. Relai-Export) aufbewahren."],
     en: ["Declare crypto correctly", "Bitcoin belongs in the securities list and is subject to wealth tax at the ESTV year-end rate. Private price gains are tax-free, staking or mining income is taxable. Keep purchase records (e.g. the Relai export)."] },
   { id: "zh-muni", cat: "tax", impact: 2, canton: "ZH",
-    de: ["Wohngemeinde zählt", "Die Gemeindesteuerfüsse im Kanton Zürich reichen von rund 70 % bis 130 % der einfachen Staatssteuer. Bei einem Umzug lohnt sich ein Vergleich – auch Kirchensteuer, Mieten und Pendelkosten einbeziehen."],
-    en: ["Your municipality matters", "Municipal tax rates in the Canton of Zurich range from about 70 % to 130 % of the simple cantonal tax. Compare when you move – including church tax, rents and commuting costs."],
+    de: ["Wohngemeinde zählt", "Die Gemeindesteuerfüsse im Kanton Zürich reichen von rund 70 % bis 130 % der einfachen Staatssteuer. Bei einem Umzug lohnt sich ein Vergleich – auch Kirchensteuer, Mieten und Pendelkosten einbeziehen. Mit der hochgeladenen Steuerfuss-Tabelle vergleicht das Dashboard alle Gemeinden."],
+    en: ["Your municipality matters", "Municipal tax rates in the Canton of Zurich range from about 70 % to 130 % of the simple cantonal tax. Compare when you move – including church tax, rents and commuting costs. With the uploaded rate table the dashboard compares all municipalities."],
     calc: (c) => c.inc > 0 && L(`Bei dir: 10 Prozentpunkte Gemeindesteuerfuss entsprechen ca. ${chf(c.muni10)} pro Jahr.`, `For you: 10 percentage points of municipal rate equal about ${chf(c.muni10)} per year.`) },
   { id: "zh-prepay", cat: "tax", impact: 1, canton: "ZH",
     de: ["Steuern im Kanton Zürich früh bezahlen", "Vorauszahlungen vor dem Fälligkeitstermin (30. September) werden mit einem Vergütungszins belohnt, verspätete Zahlungen kosten Verzugszins. Wer Liquidität hat, zahlt die provisorische Rechnung früh."],
@@ -338,7 +365,8 @@ async function loadPlan() {
   try {
     if (!plan.P) {
       const saved = await api("/api/plan").catch(() => ({}));
-      plan.P = { ...PLAN_DEFAULTS, ...saved, done: { ...(saved.done || {}) } };
+      plan.P = { ...PLAN_DEFAULTS, ...saved, done: { ...(saved.done || {}) }, cfg3a: { ...(saved.cfg3a || {}) } };
+      plan.rates = await api("/api/muni-rates").catch(() => ({}));
     }
     renderPlan();
     plan.dash = await loadPlanDash();
@@ -382,6 +410,89 @@ function field(k, label, opts = {}) {
   return `<label class="field">${label}<input type="number" inputmode="decimal" step="any" data-k="${k}" value="${esc(v)}"
     ${opts.ph != null ? `placeholder="${esc(opts.ph)}"` : ""} class="${opts.amt ? "amt" : ""}">${hint}</label>`;
 }
+/* Gemeinde aus hochgeladener Steuerfuss-Tabelle oder manuelle Steuerfüsse */
+function muniFields(c) {
+  const P = plan.P, t = muniTable(), vs = muniVariants(), r = rates();
+  let h = "";
+  if (t) {
+    if (t.years.length > 1) h += field("taxYear", L("Steuerjahr der Steuerfüsse", "Tax year of the rates"), { select: t.years.map((y) => [y, y]) });
+    h += `<label class="field">${L("Wohngemeinde", "Municipality")}<select data-k="gemeinde">
+      <option value="">${L("– manuell eingeben –", "– enter manually –")}</option>
+      ${Object.keys(t.rows).sort((a, b) => a.localeCompare(b, "de")).map((n) => `<option ${n === P.gemeinde ? "selected" : ""}>${esc(n)}</option>`).join("")}
+      </select><span class="hint">${vs ? L(`Steuerfuss ${num(r.muni, 0)} %${r.church ? ` + Kirche ${num(r.church, 0)} %` : ""} (${t.year})`, `Rate ${num(r.muni, 0)} %${r.church ? ` + church ${num(r.church, 0)} %` : ""} (${t.year})`) : L(`Tabelle ${t.year} mit ${Object.keys(t.rows).length} Gemeinden`, `${t.year} table with ${Object.keys(t.rows).length} municipalities`)}</span></label>`;
+    if (vs) {
+      h += field("konf", L("Konfession (Kirchensteuer)", "Denomination (church tax)"), { select: KONF.map(([k, de, en]) => [k, L(de, en)]) });
+      if (vs.length > 1) h += field("gemVar", L("Steuerfuss im Gemeindegebiet", "Rate within municipality"), {
+        select: vs.map((v, i) => [i, L(`Variante ${i + 1}: ${num(v[0], 0)} %`, `Variant ${i + 1}: ${num(v[0], 0)} %`)]),
+        hint: L("je nach Schul- oder Kirchgemeinde – siehe Steuerrechnung", "depends on school or parish district – see tax bill") });
+    }
+  }
+  if (!vs) h += field("muni", L("Gemeindesteuerfuss (%)", "Municipal tax rate (%)"), { hint: L(`Stadt Zürich: ${c.muni} %`, `City of Zurich: ${c.muni} %`) })
+    + field("church", L("Kirchensteuerfuss (%)", "Church tax rate (%)"), { hint: L("0 = keine Kirchensteuer", "0 = no church tax") });
+  const all = (plan.rates || {})[P.canton] || {};
+  h += `<div class="plan-upload">
+    <label class="btn ghost small" for="plMuniFile">${L("Steuerfüsse-CSV hochladen …", "Upload tax rate CSV …")}</label>
+    <input type="file" id="plMuniFile" accept=".csv,text/csv" hidden>
+    ${Object.keys(all).sort().map((y) => `<span class="active-chip">${y}<button type="button" class="plan-x" data-delyear="${y}" title="${L("Tabelle löschen", "Delete table")}" aria-label="${L("Tabelle löschen", "Delete table")} ${y}">✕</button></span>`).join("")}
+    <span class="hint">${L("CSV der Gemeindesteuerfüsse vom Kantonalen Steueramt (zh.ch/steuerfuesse). Das Jahr wird aus dem Dateinamen gelesen.",
+      "CSV of municipal tax rates from the cantonal tax office (zh.ch/steuerfuesse). The year is read from the file name.")}</span></div>`;
+  return h;
+}
+
+/* CSV der Gemeindesteuerfüsse (Kanton Zürich, Semikolon) einlesen */
+function parseCsvLine(line, sep) {
+  const out = []; let cur = "", q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === sep) { out.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.map((x) => x.trim());
+}
+function parseMuniCsv(text) {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) throw new Error(L("Die Datei ist leer.", "The file is empty."));
+  const sep = (lines[0].match(/;/g) || []).length >= (lines[0].match(/,/g) || []).length ? ";" : ",";
+  const head = parseCsvLine(lines[0], sep).map((h) => h.toLowerCase());
+  const iName = head.findIndex((h) => h === "gemeinde" || h.startsWith("gemeinde"));
+  const col = (kind, n) => head.findIndex((h) => h.startsWith(`${n}.`) && h.includes("gesamtsteuerfuss") && (
+    kind === "none" ? h.includes("ohne kirche") : kind === "christkath" ? h.includes("christkath") : kind === "kath" ? h.includes("kath.") && !h.includes("christkath") : h.includes("ref.")));
+  const cols = KONF.map(([k]) => [1, 2, 3].map((n) => col(k, n)));
+  if (iName < 0 || cols[0][0] < 0) throw new Error(L("Spalten „Gemeinde“ und „1. Gesamtsteuerfuss ohne Kirche“ nicht gefunden.", "Columns “Gemeinde” and “1. Gesamtsteuerfuss ohne Kirche” not found."));
+  const numv = (x) => { const v = parseFloat(String(x || "").replace(",", ".")); return isFinite(v) ? v : null; };
+  const rows = {};
+  for (const line of lines.slice(1)) {
+    const f = parseCsvLine(line, sep), name = f[iName];
+    if (!name) continue;
+    const vals = cols.map((cs) => cs.map((i) => (i >= 0 ? numv(f[i]) : null)));
+    if (vals[0][0] == null) continue;
+    const n = Math.max(...vals.map((v) => (v[2] != null ? 3 : v[1] != null ? 2 : 1)));
+    const vs = Array.from({ length: n }, (_, j) => vals.map((v) => (v[j] != null ? v[j] : v[0])));
+    rows[name] = vs.filter((v, j) => vs.findIndex((w) => w.join() === v.join()) === j);   // identische Varianten nur einmal
+  }
+  if (!Object.keys(rows).length) throw new Error(L("Keine Steuerfüsse gefunden", "No tax rates found"));
+  return rows;
+}
+async function uploadMuniCsv(file) {
+  const buf = await file.arrayBuffer();
+  let text;
+  try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { text = new TextDecoder("windows-1252").decode(buf); }
+  const rows = parseMuniCsv(text);
+  const year = (file.name.match(/20\d\d/) || [String(new Date().getFullYear())])[0];
+  await api("/api/muni-rates", { method: "POST", body: { canton: plan.P.canton, year, rates: rows } });
+  plan.rates = await api("/api/muni-rates");
+  plan.P.taxYear = year;
+  if (!plan.P.gemeinde) {   // bisherigen Gemeindesteuerfuss einer Gemeinde zuordnen, wenn eindeutig
+    const hit = Object.keys(rows).filter((n) => rows[n][0][0] === nv(plan.P.muni, -1));
+    if (hit.length === 1) plan.P.gemeinde = hit[0];
+  }
+  savePlan(); renderPlan();
+  toast(L(`Steuerfüsse ${year} gespeichert (${Object.keys(rows).length} Gemeinden)`, `Tax rates ${year} saved (${Object.keys(rows).length} municipalities)`));
+}
+
 function renderPlan() {
   const root = $("#planView");
   if (!root || !plan.P) return;
@@ -420,8 +531,7 @@ function renderPlan() {
         ${field("civil", L("Zivilstand", "Marital status"), { select: [["single", L("Alleinstehend", "Single")], ["married", L("Verheiratet", "Married")], ["parent", L("Alleinerziehend", "Single parent")]] })}
         ${field("kids", L("Kinder", "Children"))}
         ${field("income", L("Steuerbares Einkommen (CHF)", "Taxable income (CHF)"), { amt: true, hint: L("nach Abzügen – steht auf der letzten Steuerrechnung", "after deductions – see your last tax bill") })}
-        ${field("muni", L("Gemeindesteuerfuss (%)", "Municipal tax rate (%)"), { hint: L(`Stadt Zürich: ${c.muni} %`, `City of Zurich: ${c.muni} %`) })}
-        ${field("church", L("Kirchensteuerfuss (%)", "Church tax rate (%)"), { hint: L("0 = keine Kirchensteuer", "0 = no church tax") })}
+        ${muniFields(c)}
         ${field("marg", L("Eigener Grenzsteuersatz (%)", "Own marginal tax rate (%)"), { ph: L("automatisch", "automatic"), hint: L("optional, überschreibt die Schätzung", "optional, overrides the estimate") })}
         <h4>${L("Vorsorge", "Pension")}</h4>
         ${field("age", L("Alter", "Age"))}
@@ -463,10 +573,20 @@ function renderPlan() {
     el.addEventListener(el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "input", () => {
       const k = el.dataset.k;
       plan.P[k] = el.type === "checkbox" ? el.checked : el.tagName === "SELECT" ? el.value : el.value === "" ? "" : Number(el.value);
-      if (k === "canton") { renderPlan(); }
+      if (["canton", "gemeinde", "taxYear", "konf", "gemVar"].includes(k)) { if (k === "gemeinde") plan.P.gemVar = 0; renderPlan(); }
       renderPlanResults(); savePlan();
     });
   });
+  $("#plMuniFile").onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (f) try { await uploadMuniCsv(f); } catch (ex) { toast(ex.message, 6000); }
+  };
+  root.querySelectorAll("[data-delyear]").forEach((b) => (b.onclick = async () => {
+    const y = b.dataset.delyear;
+    if (!(await confirmDialog(L(`Steuerfüsse ${y} löschen?`, `Delete tax rates ${y}?`), L("Die hochgeladene Tabelle wird entfernt. Du kannst sie jederzeit neu hochladen.", "The uploaded table is removed. You can upload it again at any time."), L("Löschen", "Delete")))) return;
+    try { await api("/api/muni-rates", { method: "POST", body: { canton: plan.P.canton, year: y, delete: true } }); plan.rates = await api("/api/muni-rates"); renderPlan(); }
+    catch (ex) { toast(ex.message); }
+  }));
   $("#plHideDone").onchange = (e) => { plan.P.hideDone = e.target.checked; renderTips(); savePlan(); };
   renderPlanResults();
 }
@@ -474,10 +594,10 @@ function renderPlan() {
 function planCtx() {
   const P = plan.P, inc = Math.max(0, nv(P.income)), a3 = a3Limit();
   const buy = Math.max(0, nv(P.buyIn)), years = Math.max(1, Math.min(10, Math.round(nv(P.buyYears, 1))));
-  const t = taxes(inc), w = wealthNow();
+  const r = rates(), t = taxes(inc, P, r), w = wealthNow();
   const muni10 = t.simple * 0.10;
   return {
-    inc, a3, t, buy, years, muni10, spend: nv(P.spend), swr: nv(P.swr, 3.5),
+    inc, a3, t, r, buy, years, muni10, spend: nv(P.spend), swr: nv(P.swr, 3.5),
     marg: marginal(inc), save3a: saving(inc, a3), saveBack: saving(Math.max(0, inc - a3), CHV.a3Small),
     buyOnce: saving(inc, buy), buySplit: saving(inc, buy / years) * years,
     wealth: w.free + w.p3, w, fireNum: nv(P.spend) / (nv(P.swr, 3.5) / 100 || 0.035),
@@ -501,18 +621,36 @@ function renderDeadlines(c) {
         return `<button role="tab" data-pf3a="${k}" class="${on ? "on" : ""}" aria-selected="${on}">${t}</button>`;
       }).join("")}</div>` : "";
     const row = (x) => {
-      const pct = Math.min(100, x.dep / c.a3 * 100), rest = Math.max(0, c.a3 - x.dep), over = x.dep - c.a3;
+      const cf = cfg3a(x.id), lim = a3Limit(cf), pct = lim ? Math.min(100, x.dep / lim * 100) : 0;
+      const rest = Math.max(0, lim - x.dep), over = x.dep - lim, open = plan.open3a.has(String(x.id));
       return `<div class="plan-a3">
-        <div class="plan-a3-head"><b>${esc(x.name)} · ${year}</b><span>${chf(x.dep)} / ${chf(c.a3)}</span></div>
+        <div class="plan-a3-head"><b>${esc(x.name)} · ${year}</b><span>${chf(x.dep)} / ${chf(lim)}</span></div>
         <div class="plan-bar"><i style="width:${pct.toFixed(1)}%"></i></div>
         <p class="hint">${L(`Guthaben ${chf(x.value)}`, `Balance ${chf(x.value)}`)} · ${rest > 0
-          ? L(`noch ${chf(rest)} einzahlbar – spart ca. ${chf(saving(c.inc, rest))} Steuern.`, `${chf(rest)} still possible – saves about ${chf(saving(c.inc, rest))} in tax.`)
+          ? L(`noch ${chf(rest)} einzahlbar – spart ca. ${chf(save3aFor(x.id, rest))} Steuern.`, `${chf(rest)} still possible – saves about ${chf(save3aFor(x.id, rest))} in tax.`)
           : over > 1 ? L(`${chf(over)} über dem Maximum – Einzahlungen prüfen (Nachzahlung für Lückenjahre oder Fondswechsel als Einzahlung erfasst?).`, `${chf(over)} above the maximum – check deposits (catch-up for gap years or a fund switch recorded as deposit?).`)
-          : L("Maximum erreicht – allenfalls Lücken aus Vorjahren nachzahlen.", "Maximum reached – consider catching up on earlier gaps.")}</p></div>`;
+          : L("Maximum erreicht – allenfalls Lücken aus Vorjahren nachzahlen.", "Maximum reached – consider catching up on earlier gaps.")}</p>
+        <details class="plan-a3-cfg" data-cfg="${x.id}" ${open ? "open" : ""}><summary>${L("Einstellungen für dieses Konto", "Settings for this account")}
+          <span class="hint">${cf.pk ? L("mit PK", "with pension fund") : L("ohne PK", "no pension fund")} · ${cf.income === "" ? L("Einkommen aus Profil", "income from profile") : L(`Einkommen ${chf(nv(cf.income))}`, `income ${chf(nv(cf.income))}`)}</span></summary>
+          <div class="plan-form">
+            <label class="check full"><input type="checkbox" data-c3="pk" ${cf.pk ? "checked" : ""}> <span>${L("Inhaber/in ist in einer Pensionskasse versichert", "Holder is insured in a pension fund")}</span></label>
+            <label class="field">${L("Erwerbseinkommen (CHF)", "Earned income (CHF)")}<input type="number" inputmode="decimal" step="any" class="amt" data-c3="earned" value="${esc(cf.earned)}" ${cf.pk ? "disabled" : ""}><span class="hint">${L("ohne PK: 3a-Maximum = 20 %", "no pension fund: 3a max = 20 %")}</span></label>
+            <label class="field">${L("Steuerbares Einkommen (CHF)", "Taxable income (CHF)")}<input type="number" inputmode="decimal" step="any" class="amt" data-c3="income" value="${esc(cf.income)}" placeholder="${L("aus Profil", "from profile")}"><span class="hint">${L("Verheiratete: leer lassen (gemeinsame Veranlagung)", "Married: leave empty (joint assessment)")}</span></label>
+          </div></details></div>`;
     };
     box.innerHTML = tabs + sel3a().map(row).join("") + (cmp ? `<p class="hint plan-a3">${L(
-      `Jedes Konto wird einzeln gegen sein eigenes Maximum gerechnet (${chf(c.a3)} gemäss deinem Profil). Die Steuerersparnis ist mit deinem Einkommen geschätzt; für den FIRE-Rechner zählt hier die Summe von ${chf(sel3a().reduce((a, x) => a + x.value, 0))}.`,
-      `Each account is checked separately against its own maximum (${chf(c.a3)} per your profile). Tax savings are estimated with your income; the FIRE calculator uses the total of ${chf(sel3a().reduce((a, x) => a + x.value, 0))}.`)}</p>` : "");
+      `Jedes Konto wird einzeln gegen sein eigenes Maximum gerechnet. Für den FIRE-Rechner zählt hier die Summe von ${chf(sel3a().reduce((a, x) => a + x.value, 0))}.`,
+      `Each account is checked separately against its own maximum. The FIRE calculator uses the total of ${chf(sel3a().reduce((a, x) => a + x.value, 0))}.`)}</p>` : "");
+    box.querySelectorAll("details[data-cfg]").forEach((dt) => {
+      const id = dt.dataset.cfg;
+      dt.ontoggle = () => { if (dt.open) plan.open3a.add(id); else plan.open3a.delete(id); };
+      dt.querySelectorAll("[data-c3]").forEach((el) => (el.onchange = () => {
+        const cur = { ...(plan.P.cfg3a[id] || {}) }, k = el.dataset.c3;
+        cur[k] = el.type === "checkbox" ? el.checked : el.value === "" ? "" : Number(el.value);
+        if (k === "income" && cur.income === "") delete cur.income;
+        plan.P.cfg3a[id] = cur; renderPlanResults(); savePlan();
+      }));
+    });
     box.querySelectorAll("[data-pf3a]").forEach((b) => (b.onclick = () => { plan.P.pf3a = b.dataset.pf3a; renderPlanResults(); savePlan(); }));
   } else box.innerHTML = d ? `<p class="hint plan-a3">${L("Lege ein Portfolio vom Typ „Säule 3a“ an und importiere die Einzahlungen, dann siehst du hier, wie viel du dieses Jahr noch einzahlen kannst.",
     "Create a portfolio of type “Pillar 3a” and import the deposits to see how much you can still pay in this year.")}</p>` : "";
@@ -524,6 +662,22 @@ function renderDeadlines(c) {
 
 function kv(label, value, sub = "") {
   return `<div class="plan-kv"><span>${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+}
+/* Gemeindevergleich mit der hochgeladenen Tabelle (gleiche Konfession, jeweils erster Steuerfuss) */
+function muniCompare(c) {
+  const t = muniTable();
+  if (!t) return `<p class="hint">${L("Tipp: Lade die CSV der Gemeindesteuerfüsse hoch (Profil → Steuern), dann rechnet das Dashboard mit deiner Gemeinde und vergleicht alle Gemeinden.",
+    "Tip: upload the municipal tax rate CSV (profile → taxes) to calculate with your municipality and compare all municipalities.")}</p>`;
+  const list = Object.keys(t.rows).map((n) => { const r = rates(plan.P, n, 0); return { n, total: r.muni + r.church }; })
+    .sort((a, b) => a.total - b.total || a.n.localeCompare(b.n, "de"));
+  const mine = c.r.muni + c.r.church, unit = c.t.simple / 100, rank = list.filter((x) => x.total < mine).length + 1;
+  const diff = (x) => (mine - x.total) * unit;
+  const pick = [...list.slice(0, 3), ...list.slice(-1)];
+  return `<h4 class="plan-sub">${L(`Gemeindevergleich ${t.year}`, `Municipality comparison ${t.year}`)}</h4>
+    <p class="hint">${plan.P.gemeinde && c.r.csv ? L(`${esc(plan.P.gemeinde)}: ${num(mine, 0)} % – Platz ${rank} von ${list.length} (1 = am günstigsten).`, `${esc(plan.P.gemeinde)}: ${num(mine, 0)} % – rank ${rank} of ${list.length} (1 = cheapest).`)
+      : L(`Dein Steuerfuss ${num(mine, 0)} % – Platz ${rank} von ${list.length}.`, `Your rate ${num(mine, 0)} % – rank ${rank} of ${list.length}.`)}</p>
+    <table class="table plan-table"><tbody>${pick.map((x) => `<tr><td>${esc(x.n)} <span class="hint">${num(x.total, 0)} %</span></td>
+      <td class="num ${diff(x) > 0 ? "up" : diff(x) < 0 ? "down" : ""}">${diff(x) > 0 ? L(`${chf(diff(x))} weniger`, `${chf(diff(x))} less`) : diff(x) < 0 ? L(`${chf(-diff(x))} mehr`, `${chf(-diff(x))} more`) : "–"}</td></tr>`).join("")}</tbody></table>`;
 }
 function renderTax(c) {
   const box = $("#plTax");
@@ -540,14 +694,15 @@ function renderTax(c) {
   box.innerHTML = `<div class="plan-kvs">
       ${kv(L("Einkommenssteuer total", "Total income tax"), chf(c.t.total), L(`${pctS(c.t.total / c.inc * 100)} im Schnitt`, `${pctS(c.t.total / c.inc * 100)} on average`))}
       ${kv(L("Grenzsteuersatz", "Marginal tax rate"), pctS(c.marg * 100), own ? L("eigener Wert", "own value") : L("auf die nächsten 1'000 CHF", "on the next CHF 1,000"))}
-      ${kv(L("Kanton & Gemeinde", "Canton & municipality"), chf(c.t.cant), L(`Steuerfuss ${num(canton().rate + nv(plan.P.muni) + nv(plan.P.church), 0)} %`, `Rate ${num(canton().rate + nv(plan.P.muni) + nv(plan.P.church), 0)} %`))}
+      ${kv(L("Kanton & Gemeinde", "Canton & municipality"), chf(c.t.cant), L(`Steuerfuss ${num(canton().rate + c.r.muni + c.r.church, 0)} %`, `Rate ${num(canton().rate + c.r.muni + c.r.church, 0)} %`))}
       ${kv(L("Direkte Bundessteuer", "Federal income tax"), chf(c.t.fed))}
     </div>
     <table class="table plan-table"><thead><tr><th>${L("Massnahme", "Measure")}</th><th class="num">${L("Ersparnis pro Jahr", "Saving per year")}</th></tr></thead>
     <tbody>${rows.map(([l, v]) => `<tr><td>${l}</td><td class="num up">${chf(v)}</td></tr>`).join("")}</tbody></table>
     ${c.buy > 0 && c.years > 1 && c.buySplit > c.buyOnce + 50 ? `<p class="plan-win">${L(`Verteilt sparst du ca. ${chf(c.buySplit - c.buyOnce)} mehr als mit einem einmaligen Einkauf.`, `Spreading saves about ${chf(c.buySplit - c.buyOnce)} more than a single buy-in.`)}</p>` : ""}
-    <p class="hint">${L("Ohne Vermögenssteuer und Personalsteuer. Tarif vereinfacht; Abweichungen zur Steuerrechnung von einigen Prozent sind möglich.",
-      "Excludes wealth tax and poll tax. Simplified tariff; deviations of a few percent from your tax bill are possible.")}</p>`;
+    ${muniCompare(c)}
+    <p class="hint">${L("Bundessteuer nach amtlichem Tarif 2026, Staatssteuer mit vereinfachtem Tarif; ohne Vermögens- und Personalsteuer. Abweichungen zur Steuerrechnung von einigen Prozent sind möglich.",
+      "Federal tax per the official 2026 tariff, cantonal tax with a simplified tariff; excludes wealth and poll tax. Deviations of a few percent from your tax bill are possible.")}</p>`;
 }
 
 function renderFire(c) {

@@ -169,6 +169,7 @@ const EN_HTML = {
 const EN_ERR = {
   "Ungültige Daten": "Invalid data",
   "Daten zu gross": "Data too large",
+  "Keine Steuerfüsse gefunden": "No tax rates found",
   "Unbekannte Aktion": "Unknown action",
   "Updates über das Dashboard sind bei dieser Installation nicht verfügbar.": "Updates via the dashboard are not available for this installation.",
   "Der letzte Lauf wurde unterbrochen.": "The last run was interrupted.",
