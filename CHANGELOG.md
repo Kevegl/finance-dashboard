@@ -3,6 +3,26 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.0.3
+
+### Neu
+- **Zwei-Faktor-Anmeldung per QR-Code einrichten:** QR-Code mit der Authenticator-App scannen, statt den Schlüssel
+  abzutippen (eigener Generator, ohne Fremdbibliothek). Schlüssel zum Eintippen und Handy-Link bleiben.
+
+### Behoben
+- Anmeldung mit einem Benutzernamen mit Umlauten (z.B. «Jürg») schlug mit einer Fehlermeldung fehl.
+- Programm und Python-Variante: Nach einem erfolgreichen Update erschien kurz «Der letzte Lauf wurde unterbrochen»,
+  weil die neue Version schon antwortete, bevor das Ergebnis eingetragen war. Jetzt erscheint «Update installiert».
+- Bei 1.0.2 fehlte die Mac-App, weil GitHub keinen Mac-Rechner zum Bauen bereitstellte. Mit 1.0.3 wird sie wieder
+  angeboten.
+
+**Update:** *Einstellungen → Updates → Jetzt aktualisieren*. Wer noch 1.0.1 hat, erhält dabei auch alle Neuerungen
+von 1.0.2 (Wiederherstellungscode, Zwei-Faktor, Anmeldeprotokoll) – bitte danach unter
+*Einstellungen → Wiederherstellungscode* einen Code erzeugen.
+
+*English:* Two-factor setup via QR code; fixes sign-in with non-ASCII usernames and a wrong “interrupted” message
+right after a successful update; the macOS app is available again.
+
 ## 1.0.2
 
 ### Neu
@@ -11,17 +31,11 @@ Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHu
   den Code unter *Einstellungen → Wiederherstellungscode*. Im lokalen Betrieb geht es zusätzlich über
   *Passwort zurücksetzen …* im Statusfenster.
 - **Zwei-Faktor-Anmeldung (optional)** mit einer Authenticator-App (6-stelliger Code), einzuschalten unter
-  *Einstellungen → Zwei-Faktor-Anmeldung*. Einrichten per QR-Code (eigener Generator, ohne Fremdbibliothek) oder
-  mit dem Schlüssel zum Eintippen.
+  *Einstellungen → Zwei-Faktor-Anmeldung*.
 - **Anmeldeprotokoll** unter *Einstellungen → Sitzungen*: letzte Anmeldung, Fehlversuche der letzten 30 Tage und
   die letzten Ereignisse mit Zeit und Adresse.
 - **Server (Proxmox/LXC):** automatische Debian-Sicherheitsupdates und eine deutlich strengere Abschottung des
   Dienstes.
-
-### Behoben
-- Anmeldung mit einem Benutzernamen mit Umlauten (z.B. «Jürg») schlug mit einer Fehlermeldung fehl.
-- Programm und Python-Variante: Nach einem erfolgreichen Update erschien kurz «Der letzte Lauf wurde unterbrochen»,
-  weil die neue Version schon antwortete, bevor das Ergebnis eingetragen war. Jetzt erscheint «Update installiert».
 
 ### Verbessert
 - Auch falsche Passwörter in den Einstellungen zählen zur Sperre nach 5 Fehlversuchen.
