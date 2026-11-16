@@ -30,7 +30,7 @@ Sprache im Projekt: Deutsch (Schweizer Schreibweise, „ss“ statt „ß“), U
 ## Technische Leitplanken
 - Server: nur Python 3 Standardbibliothek + SQLite (`app/*.py`) – keine pip-Pakete. PyInstaller wird nur in
   GitHub Actions zum Bauen der .exe/App benutzt (`packaging/build_app.py`). Mindestversion Python 3.10.
-- Lokaler Betrieb (`app/launcher.py`, `app/local_update.py`, `FD_LOCAL=1`) und Docker (`FD_DOCKER=1`) bei
+- Lokaler Betrieb (`app/launcher.py`, `app/local_update.py`, Statusfenster `app/status_window.py` mit tkinter, `FD_LOCAL=1`) und Docker (`FD_DOCKER=1`) bei
   Änderungen an Start, Updates oder `/api/health` mitdenken.
 - Frontend: Vanilla JS/CSS ohne Build-Schritt und ohne externe Ressourcen (CSP: `script-src 'self'`, keine Inline-Skripte).
 - Neue UI-Texte immer zweisprachig: statische Texte in `EN` bzw. `EN_HTML` (`app/static/i18n.js`), dynamische mit `L("de", "en")`,

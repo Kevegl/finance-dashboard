@@ -28,7 +28,8 @@ EXTRA = ["calendar", "decimal", "fractions", "statistics", "uuid", "gzip", "bz2"
          "html.parser", "xml.etree.ElementTree", "email.utils", "email.message", "mimetypes", "locale", "shlex",
          "difflib", "textwrap", "string", "random", "heapq", "bisect", "copy", "pprint", "queue", "concurrent.futures",
          "unicodedata", "codecs", "encodings.idna", "importlib.machinery", "http.cookiejar", "socketserver",
-         "logging", "traceback", "dataclasses", "enum", "functools", "itertools", "operator", "typing"]
+         "logging", "traceback", "dataclasses", "enum", "functools", "itertools", "operator", "typing",
+         "tkinter", "tkinter.ttk", "tkinter.messagebox"]   # Statusfenster (app/status_window.py)
 
 
 def stdlib_imports():
@@ -67,7 +68,7 @@ def main():
     hidden = sorted(set(stdlib_imports()) | set(EXTRA))
     cmd = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", NAME,
            "--distpath", str(dist), "--workpath", str(build / "work"), "--specpath", str(build),
-           "--add-data", f"{stage}{os.pathsep}app", "--exclude-module", "tkinter",
+           "--add-data", f"{stage}{os.pathsep}app",
            "--osx-bundle-identifier", "io.github.finanzdashboard"]
     for h in hidden:
         cmd += ["--hidden-import", h]

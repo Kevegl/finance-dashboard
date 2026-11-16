@@ -28,6 +28,7 @@ import runpy
 import signal
 import socket
 import subprocess
+import threading
 import time
 import urllib.request
 import webbrowser
@@ -103,6 +104,10 @@ class Launcher:
         self.url = f"http://127.0.0.1:{self.port}/"
         self.bundled = lu.app_version(BUNDLE) or "0.0.0"
         self.child = None
+        self.status = "starting"     # für das Statusfenster: starting, running, updating, restarting
+        self.lang = None             # Sprache des Dashboards (de/en), sobald es läuft
+        self.stopping = False        # Beenden über das Statusfenster angefordert
+        self.interrupted = False     # Strg+C/Signal, während das Statusfenster offen ist
 
     # ---------- Version wählen
     def active(self):
@@ -196,6 +201,7 @@ class Launcher:
         target, action = st.get("pending"), st.get("pending_action") or "update"
         if not target:
             return False
+        self.status = "updating"
         status = lu.read_status(self.data)
         log = list(status.get("log") or [])
 
@@ -243,8 +249,22 @@ class Launcher:
         lu.cleanup_versions(self.data, {v for v in (old_cur, old_prev) if v})
         return False
 
+    def fetch_lang(self):
+        try:
+            with urllib.request.urlopen(self.url + "api/auth/status", timeout=3) as r:  # noqa: S310
+                lang = json.loads(r.read(4096).decode()).get("lang")
+            self.lang = lang if lang in ("de", "en") else self.lang
+        except (OSError, ValueError):
+            pass
+
+    def request_stop(self):
+        """Beenden über das Statusfenster (läuft in einem eigenen Thread)."""
+        self.stopping = True
+        self.stop_child()
+
     # ---------- Hauptschleife
-    def run(self, open_browser=True):
+    def prepare(self, open_browser=True):
+        """Vorprüfungen. Gibt einen Exit-Code zurück, wenn nicht gestartet werden soll, sonst None."""
         if self.health(timeout=1):
             say(f"Das Finanz-Dashboard läuft bereits: {self.url}",
                 f"The finance dashboard is already running: {self.url}")
@@ -266,30 +286,43 @@ class Launcher:
         say("  Finanz-Dashboard")
         say(f"  Adresse / Address:  {self.url}")
         say(f"  Daten / Data:       {self.data}")
-        say("  Zum Beenden: Einstellungen → «Dashboard beenden», dieses Fenster schliessen oder Strg+C.")
-        say("  To quit: Settings → “Quit dashboard”, close this window or press Ctrl+C.")
+        say("  Zum Beenden: «Beenden» im Statusfenster, Einstellungen → «Dashboard beenden» oder Strg+C.")
+        say("  To quit: “Quit” in the status window, Settings → “Quit dashboard” or press Ctrl+C.")
         say("")
+        return None
+
+    def supervise(self, open_browser=True):
+        """Startet den Server und überwacht ihn (Neustart nach Update, nach Absturz)."""
         first, crashes = True, []
         while True:
+            if self.stopping:
+                return 0
             running = self.switch()
             if not running:
                 app_dir, version = self.active()
                 self.start(app_dir, version)
                 if first:
                     if not self.wait_healthy():
-                        if self.child.poll() is None:
+                        if self.stopping:
+                            return 0
+                        if self.child and self.child.poll() is None:
                             self.stop_child()
                         fail("Das Dashboard startet nicht.", "The dashboard does not start.")
                         return 1
                     if open_browser:
                         webbrowser.open(self.url)
+            if first or self.lang is None:
+                self.fetch_lang()
             first = False
-            code = self.child.wait()
+            self.status = "running"
+            child = self.child
+            code = child.wait() if child else 0
             self.child = None
-            if code == 0:
+            if self.stopping or code == 0:
                 say("Das Finanz-Dashboard wurde beendet.", "The finance dashboard has been closed.")
                 return 0
             if code == lu.RESTART_CODE:
+                self.status = "updating"
                 continue
             crashes = [t for t in crashes if time.time() - t < 120] + [time.time()]
             if len(crashes) >= 3:
@@ -298,6 +331,7 @@ class Launcher:
                 return 1
             say(f"Das Dashboard wurde unerwartet beendet (Code {code}) – starte neu …",
                 f"The dashboard stopped unexpectedly (code {code}) – restarting …")
+            self.status = "restarting"
             time.sleep(2)
 
 
@@ -316,19 +350,47 @@ def log_to_file():
         pass
 
 
+def status_window(launcher):
+    """Statusfenster «Finanz-Dashboard läuft» – None, wenn tkinter/Bildschirm fehlt oder FD_NO_GUI gesetzt ist."""
+    if os.environ.get("FD_NO_GUI"):
+        return None
+    try:
+        import status_window as sw
+        return sw.StatusWindow(launcher)
+    except Exception as e:  # noqa: BLE001  (kein tkinter, kein Bildschirm, …)
+        print(f"(Statusfenster nicht verfügbar: {e.__class__.__name__})", flush=True)
+        return None
+
+
 def main():
     if FROZEN:
         log_to_file()
     launcher = Launcher()
     if launcher.delegate():
         return 0
+    open_browser = "--no-browser" not in sys.argv and not os.environ.get("FD_NO_BROWSER")
+    code = launcher.prepare(open_browser)
+    if code is not None:
+        return code
+    window = status_window(launcher)
+
     def _term(*_):
-        raise KeyboardInterrupt
-    for sig in ("SIGTERM", "SIGHUP"):
+        if window:                    # Tk läuft im Hauptthread: nur vormerken, das Fenster beendet sauber
+            launcher.interrupted = True
+        else:
+            raise KeyboardInterrupt
+    for sig in ("SIGINT", "SIGTERM", "SIGHUP") if window else ("SIGTERM", "SIGHUP"):
         if hasattr(signal, sig):
             signal.signal(getattr(signal, sig), _term)
     try:
-        return launcher.run(open_browser="--no-browser" not in sys.argv and not os.environ.get("FD_NO_BROWSER"))
+        if not window:
+            return launcher.supervise(open_browser)
+        result = []
+        worker = threading.Thread(target=lambda: result.append(launcher.supervise(open_browser)), daemon=True)
+        worker.start()
+        window.run(worker)
+        worker.join(15)
+        return result[0] if result else 0
     except KeyboardInterrupt:
         say("\nDas Finanz-Dashboard wird beendet …", "Closing the finance dashboard …")
         return 0

@@ -4,7 +4,9 @@ Finanz-Dashboard
 Starten:  FinanzDashboard.exe doppelklicken. Der Browser öffnet sich mit http://127.0.0.1:8765
           Beim ersten Start warnt Windows ("Der Computer wurde durch Windows geschützt"), weil das
           Programm nicht kostenpflichtig signiert ist: "Weitere Informationen" -> "Trotzdem ausführen".
-Beenden:  Im Dashboard unter Einstellungen -> Programm -> "Dashboard beenden".
+Läuft es? Solange das Dashboard läuft, ist das Fenster "Finanz-Dashboard" in der Taskleiste.
+Beenden:  Im Fenster "Finanz-Dashboard" auf "Beenden" klicken (oder im Dashboard: Einstellungen ->
+          Programm -> "Dashboard beenden").
 Daten:    %LOCALAPPDATA%\FinanzDashboard  (bleiben bei Updates erhalten; diesen Ordner nicht löschen)
 Updates:  Einstellungen -> Updates. Der Programmordner hier kann jederzeit durch einen neueren ersetzt werden.
 
@@ -18,7 +20,9 @@ Finance dashboard
 Start:    Double-click FinanzDashboard.exe. Your browser opens http://127.0.0.1:8765
           On first start Windows warns ("Windows protected your PC") because the program is not
           commercially signed: "More info" -> "Run anyway".
-Quit:     In the dashboard: Settings -> Application -> "Quit dashboard".
+Running?  While the dashboard runs, the "Finanz-Dashboard" window is in the taskbar.
+Quit:     Click "Quit" in the "Finanz-Dashboard" window (or in the dashboard: Settings -> Application ->
+          "Quit dashboard").
 Data:     %LOCALAPPDATA%\FinanzDashboard  (kept across updates; do not delete this folder)
 Updates:  Settings -> Updates. You can replace this program folder with a newer one at any time.
 

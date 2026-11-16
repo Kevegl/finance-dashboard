@@ -40,9 +40,12 @@ sind dafür auch vom Handy aus erreichbar, zu Hause oder per VPN.
      *Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen*. Das ist nur beim ersten Mal nötig.
 4. Der Browser öffnet sich. Beim ersten Aufruf legst du Benutzername und Passwort fest.
 
-Das Programm hat kein eigenes Fenster. **Beenden** kannst du es im Dashboard unter
-*Einstellungen → Programm → Dashboard beenden*. Klickst du das Programm erneut an, während es schon läuft,
-öffnet sich nur der Browser. Meldungen zur Fehlersuche stehen in `local/launcher.log` im Datenordner (siehe unten).
+Solange das Dashboard läuft, zeigt ein kleines **Statusfenster** «Finanz-Dashboard – Läuft auf diesem Computer»
+mit den Knöpfen *Im Browser öffnen* und *Beenden*. Es bleibt in der Taskleiste bzw. im Dock, auch wenn du den
+Browser schliesst, und lässt sich minimieren. Schliesst du das Fenster, wird das Dashboard beendet. Beenden geht
+auch im Dashboard unter *Einstellungen → Programm → Dashboard beenden*. Klickst du das Programm erneut an, während
+es schon läuft, öffnet sich nur der Browser. Meldungen zur Fehlersuche stehen in `local/launcher.log` im
+Datenordner (siehe unten).
 
 ## Python-Variante (Windows, Mac, Linux)
 
@@ -56,10 +59,11 @@ Das Programm hat kein eigenes Fenster. **Beenden** kannst du es im Dashboard unt
    - macOS: `start.command`. Beim ersten Mal *Rechtsklick → Öffnen*, weil die Datei aus dem Internet stammt.
    - Linux: `./start.sh` im Terminal
 
-   Es öffnet sich ein kleines Fenster und danach der Browser.
+   Es öffnen sich ein Konsolenfenster, das kleine Statusfenster (wie beim Programm, siehe oben) und der Browser.
+   Unter Linux erscheint das Statusfenster nur, wenn `python3-tk` installiert ist, sonst bleibt nur die Konsole.
 
-**Beenden:** *Einstellungen → Programm → Dashboard beenden*, oder das Fenster des Startprogramms schliessen
-bzw. dort `Strg+C` drücken.
+**Beenden:** *Beenden* im Statusfenster, *Einstellungen → Programm → Dashboard beenden* oder `Strg+C` im
+Konsolenfenster.
 
 ### Daten, Updates und Passwort (Programm und Python-Variante)
 

@@ -5,6 +5,11 @@ Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHu
 
 ## 1.0.1
 
+### Neu
+- Statusfenster «Finanz-Dashboard – Läuft auf diesem Computer» mit *Im Browser öffnen* und *Beenden*: Man sieht
+  jederzeit in der Taskleiste bzw. im Dock, dass das Dashboard noch läuft, auch wenn der Browser geschlossen ist.
+  Für das Programm (.exe/.app) und die Python-Variante; Sprache folgt der Einstellung im Dashboard.
+
 ### Behoben
 - Windows: «GitHub nicht erreichbar: CERTIFICATE_VERIFY_FAILED» bei der Update-Prüfung. Fehlt im
   Windows-Zertifikatsspeicher ein Stammzertifikat, lässt das Dashboard Windows es jetzt automatisch ergänzen und
@@ -15,7 +20,8 @@ Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHu
 **Update:** *Einstellungen → Updates → Jetzt aktualisieren*. Erscheint unter Windows noch die Zertifikatsmeldung,
 öffne einmal https://api.github.com in Edge und klicke danach auf *Nach Updates suchen*.
 
-*English:* Fixes the certificate error on Windows when checking for updates.
+*English:* New status window showing that the dashboard is running (with “Open in browser” and “Quit”);
+fixes the certificate error on Windows when checking for updates.
 
 ## 1.0.0
 
