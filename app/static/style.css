@@ -537,6 +537,9 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); marg
 .plan-upload .err { flex-basis: 100%; margin: 0; }
 
 /* Zwei-Faktor, Wiederherstellungscode, Anmeldeprotokoll */
+.qr-box { display: flex; }
+.qr-box:empty { display: none; }
+.qr-box svg { flex: none; width: 184px; height: 184px; max-width: 100%; border-radius: 10px; border: 1px solid var(--border); }   /* Code immer auf Weiss */
 .secret-box { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .secret { flex: 1 1 200px; min-width: 0; padding: 10px 12px; background: var(--page); border: 1px solid var(--border);
   border-radius: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 15px;

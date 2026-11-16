@@ -26,6 +26,10 @@ jobs:
           bash -n install.sh start.sh start.command finance-dashboard-cert.sh
       - name: Server-Modus mit Beispiel-CSV
         run: python tests/smoke_server.py
+      - name: QR-Code-Generator (Rundlauf mit OpenCV, nur zum Testen installiert)
+        run: |
+          python -m pip install --quiet opencv-python-headless numpy
+          python tests/qr_roundtrip.py
 
   local:
     name: lokal (${{ matrix.os }})

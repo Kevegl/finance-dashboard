@@ -382,8 +382,9 @@ Release-Workflow auch ohne Veröffentlichung testen. Die gebauten Dateien liegen
   der Anmeldeseite unter *Passwort vergessen?* ein neues Passwort, ganz ohne Befehle. Danach gibt es sofort einen
   neuen Code. Bestehende Installationen erzeugen ihren Code unter *Einstellungen → Wiederherstellungscode*.
 - **Zwei-Faktor-Anmeldung (optional):** Unter *Einstellungen → Zwei-Faktor-Anmeldung* einschalten und den
-  angezeigten Schlüssel in einer Authenticator-App eintragen (z.B. Google Authenticator, Microsoft Authenticator,
-  1Password, Bitwarden). Auf dem Handy öffnet der Link *In Authenticator-App öffnen* die App direkt. Danach
+  QR-Code mit einer Authenticator-App scannen (z.B. Google Authenticator, Microsoft Authenticator, 1Password,
+  Bitwarden). Alternativ den Schlüssel von Hand eintippen. Auf dem Handy öffnet der Link *In Authenticator-App
+  öffnen* die App direkt. Danach
   braucht die Anmeldung zusätzlich den 6-stelligen Code. Handy verloren? Der Wiederherstellungscode schaltet die
   Zwei-Faktor-Anmeldung aus.
 - **Anmeldeprotokoll:** *Einstellungen → Sitzungen* zeigt die letzte Anmeldung, die Fehlversuche der letzten

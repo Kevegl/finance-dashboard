@@ -976,17 +976,18 @@ $("#formTotpStart").onsubmit = async (e) => {
     f.reset(); state.totpSetup = r;
     $("#totpKey").textContent = r.secret.replace(/(.{4})/g, "$1 ").trim();
     $("#totpLink").href = r.uri;
+    try { $("#totpQr").replaceChildren(QR.svg(r.uri, 184)); } catch { $("#totpQr").replaceChildren(); }
     $("#formTotpConfirm").elements.code.value = ""; totpErr("#totpErr2");
     renderTotp({ totp: false }); $("#formTotpConfirm").elements.code.focus();
   } catch (ex) { totpErr("#totpErr", ex.message); }
 };
 wireCopy($("#btnTotpCopy"), () => (state.totpSetup || {}).secret || "");
-$("#btnTotpCancel").onclick = () => { state.totpSetup = null; $("#totpKey").textContent = ""; loadSettings(); };
+$("#btnTotpCancel").onclick = () => { state.totpSetup = null; $("#totpKey").textContent = ""; $("#totpQr").replaceChildren(); loadSettings(); };
 $("#formTotpConfirm").onsubmit = async (e) => {
   e.preventDefault(); const f = e.target; totpErr("#totpErr2");
   try {
     await api("/api/account/totp/confirm", { method: "POST", body: { code: f.elements.code.value } });
-    state.totpSetup = null; $("#totpKey").textContent = ""; f.reset();
+    state.totpSetup = null; $("#totpKey").textContent = ""; $("#totpQr").replaceChildren(); f.reset();
     toast(L("Zwei-Faktor-Anmeldung eingeschaltet", "Two-factor sign-in switched on")); loadSettings();
   } catch (ex) { totpErr("#totpErr2", ex.message); }
 };

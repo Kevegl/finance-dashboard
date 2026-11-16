@@ -239,7 +239,9 @@
       <div class="form-actions"><button class="btn primary" type="submit">Einschalten</button></div>
     </form>
     <form class="settings-form" id="formTotpConfirm" novalidate hidden>
-      <p class="hint full">Gib diesen Schlüssel in deiner Authenticator-App ein (Konto hinzufügen, «Schlüssel manuell eingeben», zeitbasiert).</p>
+      <p class="hint full">Scanne den QR-Code mit deiner Authenticator-App (Konto hinzufügen → QR-Code scannen).</p>
+      <div class="qr-box full" id="totpQr" aria-label="QR-Code für die Authenticator-App"></div>
+      <p class="hint full">Oder gib den Schlüssel von Hand ein («Schlüssel manuell eingeben», zeitbasiert):</p>
       <div class="secret-box full"><code id="totpKey" class="secret"></code><button class="btn ghost" id="btnTotpCopy" type="button">Kopieren</button></div>
       <p class="hint full"><a id="totpLink" href="#">In Authenticator-App öffnen</a> (funktioniert auf dem Handy)</p>
       <label class="field full">Code aus der App (6 Stellen)<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456" required></label>
@@ -447,6 +449,7 @@
 <div class="tooltip" id="tip" hidden></div>
 <div class="toast" id="toast" hidden></div>
 <script src="i18n.js"></script>
+<script src="qr.js"></script>
 <script src="app.js"></script>
 <script src="plan.js"></script>
 </body>

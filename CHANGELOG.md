@@ -11,11 +11,15 @@ Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHu
   den Code unter *Einstellungen → Wiederherstellungscode*. Im lokalen Betrieb geht es zusätzlich über
   *Passwort zurücksetzen …* im Statusfenster.
 - **Zwei-Faktor-Anmeldung (optional)** mit einer Authenticator-App (6-stelliger Code), einzuschalten unter
-  *Einstellungen → Zwei-Faktor-Anmeldung*.
+  *Einstellungen → Zwei-Faktor-Anmeldung*. Einrichten per QR-Code (eigener Generator, ohne Fremdbibliothek) oder
+  mit dem Schlüssel zum Eintippen.
 - **Anmeldeprotokoll** unter *Einstellungen → Sitzungen*: letzte Anmeldung, Fehlversuche der letzten 30 Tage und
   die letzten Ereignisse mit Zeit und Adresse.
 - **Server (Proxmox/LXC):** automatische Debian-Sicherheitsupdates und eine deutlich strengere Abschottung des
   Dienstes.
+
+### Behoben
+- Anmeldung mit einem Benutzernamen mit Umlauten (z.B. «Jürg») schlug mit einer Fehlermeldung fehl.
 
 ### Verbessert
 - Auch falsche Passwörter in den Einstellungen zählen zur Sperre nach 5 Fehlversuchen.
