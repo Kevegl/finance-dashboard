@@ -10,6 +10,10 @@ Das Dashboard selbst läuft als eingeschränkter Benutzer und kann nur eine Auft
 (FD_DATA_DIR/update-request) schreiben. Dieser Dienst liest daraus ausschliesslich die Wörter
 check/update/rollback – alles andere wird verworfen. Status und Log landen in einem
 Verzeichnis, das nur root beschreiben kann.
+
+Kanal (FD_UPDATE_CHANNEL in /etc/finance-dashboard.env):
+  main     -> jeder neue Commit auf dem Branch ist ein Update (Standard bei bestehenden Installationen)
+  release  -> nur veröffentlichte Versionen (Git-Tags v1.2.3); Standard bei Neuinstallationen
 """
 import fcntl
 import json
@@ -108,19 +112,28 @@ class Updater:
         upstream = self.git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}", check=False)
         if not upstream:
             raise RuntimeError(f"Branch '{branch}' hat keinen Upstream (git branch -u origin/{branch}).")
+        channel = "release" if self.env.get("FD_UPDATE_CHANNEL", "main").strip().lower() == "release" else "main"
         if fetch:
-            self.log(f"Prüfe {self.git('remote', 'get-url', 'origin')} ({upstream}) …")
-            self.git("fetch", "--quiet", "--prune", "origin", timeout=180)
-        behind = int(self.git("rev-list", "--count", "HEAD..@{u}"))
+            self.log(f"Prüfe {self.git('remote', 'get-url', 'origin')} ({upstream}, Kanal {channel}) …")
+            self.git("fetch", "--quiet", "--prune", "--tags", "origin", timeout=180)
+        target = "@{u}"
+        if channel == "release":
+            tags = [t for t in self.git("tag", "-l", "v*", "--sort=-v:refname", "--merged", "@{u}").split()
+                    if re.fullmatch(r"v\d+(\.\d+){1,3}", t)]
+            if not tags:
+                raise RuntimeError("Für den Kanal «Releases» gibt es noch keine Version (Tag v…) auf GitHub.")
+            target = tags[0]
+        behind = int(self.git("rev-list", "--count", f"HEAD..{target}"))
         ahead = int(self.git("rev-list", "--count", "@{u}..HEAD"))
         dirty = bool(self.git("status", "--porcelain", "--untracked-files=no"))
         commits = []
         if behind:
-            for line in self.git("log", "--max-count=50", "--format=%h%x1f%cI%x1f%s", "HEAD..@{u}").splitlines():
+            for line in self.git("log", "--max-count=50", "--format=%h%x1f%cI%x1f%s", f"HEAD..{target}").splitlines():
                 h, when, subject = line.split("\x1f", 2)
                 commits.append({"short": h, "date": when, "subject": subject})
-        info = {"branch": branch, "upstream": upstream, "current": self.commit_info("HEAD"),
-                "remote": self.commit_info("@{u}"), "behind": behind, "ahead": ahead, "dirty": dirty,
+        info = {"branch": branch if channel == "main" else f"{branch} · Releases ({target})", "upstream": upstream,
+                "channel": channel, "target": target, "current": self.commit_info("HEAD"),
+                "remote": self.commit_info(target), "behind": behind, "ahead": ahead, "dirty": dirty,
                 "commits": commits, "last_check": now()}
         return info
 
@@ -198,7 +211,7 @@ class Updater:
             raise RuntimeError("Im Repository gibt es lokale Änderungen – Update abgebrochen (git status im Container).")
         if info["ahead"]:
             raise RuntimeError("Der lokale Stand weicht von GitHub ab (eigene Commits) – Update abgebrochen.")
-        before = self.switch_to("@{u}", "update")
+        before = self.switch_to(info["target"], "update")
         info = self.inspect(fetch=False)
         info["previous"] = self.commit_info(before)
         info["last_update"] = now()

@@ -27,11 +27,14 @@ chown -R finance:finance "$DEST" /var/lib/finance-dashboard
 chmod 750 /var/lib/finance-dashboard
 
 # --- Einstellungen (fehlende Werte werden ergänzt, vorhandene nie überschrieben)
+FRESH=0; [ -f "$ENV" ] || FRESH=1
 touch "$ENV"; chmod 600 "$ENV"
 has() { grep -qE "^$1=" "$ENV"; }
 has FD_PORT     || echo "FD_PORT=$PORT" >> "$ENV"
 has FD_BASE_CCY || echo "FD_BASE_CCY=$BASE_CCY" >> "$ENV"
 has FD_DATA_DIR || echo "FD_DATA_DIR=/var/lib/finance-dashboard" >> "$ENV"
+# Neue Installationen erhalten nur veröffentlichte Versionen; bestehende behalten ihr Verhalten (main)
+[ "$FRESH" = 1 ] && ! has FD_UPDATE_CHANNEL && echo "FD_UPDATE_CHANNEL=release" >> "$ENV"
 
 # Anmeldung wird jetzt im Browser eingerichtet – alte Einträge aus früheren Versionen entfernen
 sed -i '/^#\?FD_USER=/d; /^#\?FD_PASS=/d; /Passwortschutz/d; /^# Anmeldung (Benutzer/d' "$ENV"
