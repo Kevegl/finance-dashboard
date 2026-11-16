@@ -11,6 +11,49 @@ Importiert CSV-Exporte von **Relai** (Bitcoin) und **Interactive Brokers** (ETFs
 - Hell/Dunkel-Modus, funktioniert auch auf dem Handy
 - Spartipps & Vorsorge: Steuer-Schätzung, 3a-Stand, FIRE-/Pensionsrechner und Fristen (Kanton Zürich)
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dunkel.png">
+  <img src="docs/screenshots/dashboard-hell.png" alt="Übersicht des Finanz-Dashboards mit Gesamtwert, Wertentwicklung, Aufteilung und Positionen">
+</picture>
+
+<sub>Alle Werte in den Bildern sind erfunden (Beispieldaten aus <code>beispiel-csv/</code>).</sub>
+
+## So funktioniert's
+
+1. **Exporte herunterladen** – bei Relai, Interactive Brokers, Finpension oder VIAC die Transaktionen als CSV
+   bzw. die PDF-Belege speichern. Bei anderen Anbietern geht jede CSV-Datei.
+2. **Importieren** – Datei ins Dashboard ziehen. Es erkennt den Anbieter, zeigt eine Vorschau und überspringt
+   Einträge, die schon vorhanden sind. Erst mit dem Klick auf *Importieren* wird etwas gespeichert.
+3. **Überblick behalten** – Kurse und Wechselkurse werden automatisch aktualisiert. Oben siehst du Gesamtwert,
+   investiertes Geld und Gewinn, darunter die Entwicklung über die Zeit, die Aufteilung und alle Positionen.
+
+<table>
+  <tr>
+    <td width="62%"><img src="docs/screenshots/import.png" alt="Import mit automatischer Erkennung und Vorschau"></td>
+    <td><img src="docs/screenshots/handy.png" alt="Dashboard auf dem Handy im dunklen Modus"></td>
+  </tr>
+  <tr>
+    <td><b>Import:</b> Anbieter wird erkannt, Vorschau vor dem Speichern, Duplikate werden übersprungen.</td>
+    <td><b>Handy:</b> passt sich an kleine Bildschirme an, hell oder dunkel.</td>
+  </tr>
+</table>
+
+**Mehrere Portfolios und Säule 3a** – jedes Konto bekommt einen eigenen Reiter. Bei 3a-Konten rechnet das
+Dashboard mit den Einzahlungen: *Selbst einbezahlt* gegenüber *Gesamtwert*, inklusive Kontoguthaben.
+
+<img src="docs/screenshots/saeule-3a.png" alt="Säule-3a-Portfolio mit Einzahlungen und Wertentwicklung">
+
+**Spartipps & Vorsorge** (Glühbirne oben rechts) – Fristen der nächsten Monate, wie viel 3a-Einzahlungen und
+PK-Einkäufe an Steuern sparen, Gemeindevergleich sowie ein FIRE- und Pensionsrechner. Die Angaben im Profil
+werden nur in deinem Dashboard gespeichert.
+
+<img src="docs/screenshots/spartipps.png" alt="Ansicht Spartipps & Vorsorge mit Fristen, Steuerersparnis und Profil">
+
+**Einstellungen → Programm und Updates** – zeigt Version und Datenordner, prüft täglich auf neue Versionen und
+installiert sie per Klick. Startet eine neue Version nicht, kehrt das Dashboard automatisch zur bisherigen zurück.
+
+<img src="docs/screenshots/einstellungen.png" width="640" alt="Einstellungen mit Programm-Infos und Update-Prüfung">
+
 ## Welche Variante passt zu mir?
 
 | Du hast …                                   | Empfehlung                                                   | Updates                         |
@@ -275,7 +318,13 @@ python3 tests/smoke_server.py    # Kurztest Server-Modus inkl. Import aller Beis
 python3 tests/smoke_local.py     # Kurztest lokaler Betrieb (Start, Anmeldung, zweite Instanz, Beenden)
 ```
 
-Im Ordner `beispiel-csv/` liegen Testdateien für alle Formate (erfundene Werte). GitHub Actions führt die
+Im Ordner `beispiel-csv/` liegen Testdateien für alle Formate (erfundene Werte).
+
+**Screenshots fürs README neu erstellen:** `python3 docs/screenshots/demo_data.py /tmp/fd-demo` legt ein
+Demo-Dashboard mit erfundenen Werten und Kursen an. Danach den Server damit starten
+(`FD_DATA_DIR=/tmp/fd-demo FD_PRICE_TTL=999999999 python3 app/server.py`) und
+`node docs/screenshots/shoot.js http://127.0.0.1:8080 docs/screenshots <Import-CSV>` ausführen (Playwright nötig).
+Für das Bild der Einstellungen den Server zusätzlich mit `FD_LOCAL=1` starten und `shoot.js` mit `local` aufrufen. GitHub Actions führt die
 Kurztests bei jedem Push auf Windows, macOS und Linux aus (`.github/workflows/tests.yml`), inklusive der
 Startskripte und des Docker-Images.
 
