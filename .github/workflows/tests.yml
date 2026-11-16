@@ -47,8 +47,21 @@ jobs:
       - name: GitHub-Releases abrufen (echte Zertifikatsprüfung, Windows-Ergänzung über PowerShell)
         if: runner.os == 'Windows'
         working-directory: app
+        shell: bash
         run: |
-          python -c "import local_update as lu; lu.warm_windows_certs('https://api.github.com/'); r = lu.fetch_releases(); print('Releases:', [x['tag'] for x in r]); assert r"
+          python - <<'PY'
+          import local_update as lu
+          lu.warm_windows_certs("https://api.github.com/")
+          try:
+              r = lu.fetch_releases()
+          except RuntimeError as e:
+              if "begrenzt" in str(e):     # anonyme API-Grenze der geteilten Test-Rechner, kein Fehler im Code
+                  print("::warning::GitHub-API begrenzt die Anfrage – Prüfung übersprungen")
+                  raise SystemExit(0)
+              raise
+          print("Releases:", [x["tag"] for x in r])
+          assert r
+          PY
       - name: start.command (macOS)
         if: runner.os == 'macOS'
         run: python tests/smoke_local.py -- bash start.command
