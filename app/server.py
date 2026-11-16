@@ -1463,6 +1463,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, st)
             if path == "/api/export.csv":
                 return self._export_csv(self._pid())
+            if path == "/api/plan":   # Profil der Ansicht «Spartipps & Vorsorge»
+                try:
+                    plan = json.loads(get_setting("plan", "{}"))
+                except ValueError:
+                    plan = {}
+                return self._send(200, plan if isinstance(plan, dict) else {})
             if path == "/api/portfolios":
                 return self._send(200, list_portfolios())
             if path == "/api/backup":
@@ -1521,6 +1527,14 @@ class Handler(BaseHTTPRequestHandler):
                                          chunk).rowcount
                     self._cleanup_assets(con)
                 return self._send(200, {"deleted": n})
+            if path == "/api/plan":
+                if not isinstance(body, dict):
+                    raise ValueError("Ungültige Daten")
+                data = json.dumps(body, ensure_ascii=False, separators=(",", ":"))
+                if len(data) > 20000:
+                    raise ValueError("Daten zu gross")
+                set_setting("plan", data)
+                return self._send(200, {"ok": True})
             if path == "/api/settings":
                 global BASE
                 title = (body.get("title") or "").strip()[:60] or "Portfolio"

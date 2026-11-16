@@ -15,6 +15,7 @@ const EN = {
   "Beträge verbergen": "Hide amounts",
   "Beträge anzeigen": "Show amounts",
   "Einstellungen": "Settings",
+  "Spartipps & Vorsorge": "Savings tips & retirement",
   "Hell/Dunkel": "Light/Dark",
   "Darstellung wechseln": "Toggle theme",
   "+ Transaktion": "+ Transaction",
@@ -166,6 +167,8 @@ const EN_HTML = {
 
 /* Fehlermeldungen des Servers */
 const EN_ERR = {
+  "Ungültige Daten": "Invalid data",
+  "Daten zu gross": "Data too large",
   "Unbekannte Aktion": "Unknown action",
   "Updates über das Dashboard sind bei dieser Installation nicht verfügbar.": "Updates via the dashboard are not available for this installation.",
   "Der letzte Lauf wurde unterbrochen.": "The last run was interrupted.",

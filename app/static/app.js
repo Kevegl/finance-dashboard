@@ -160,6 +160,7 @@ function applyLanguage(lang) {
   if (state.summary) render();
   renderNews();
   if (!$("#settingsView").hidden) loadSettings();
+  if (!$("#planView").hidden && typeof renderPlan === "function") renderPlan();
 }
 
 function render() {
@@ -732,6 +733,7 @@ $("#btnHide").onclick = () => {
   try { localStorage.setItem("fd-hide", state.hide ? "1" : "0"); } catch {}
   applyHide();
   if (state.summary) render();
+  if (!$("#planView").hidden && typeof renderPlan === "function") renderPlan();
 };
 
 /* ---------- Events ---------- */
@@ -848,10 +850,12 @@ $("#authForm").onsubmit = async (e) => {
 
 /* ---------- Einstellungen ---------- */
 function applyRoute() {
-  const settings = location.hash === "#/einstellungen";
-  $("#dashView").hidden = settings; $("#settingsView").hidden = !settings;
+  const settings = location.hash === "#/einstellungen", plan = location.hash === "#/vorsorge";
+  $("#dashView").hidden = settings || plan; $("#settingsView").hidden = !settings; $("#planView").hidden = !plan;
   $("#btnSettings").classList.toggle("active", settings);
+  $("#btnPlan").classList.toggle("active", plan);
   if (settings) loadSettings();
+  if (plan && typeof loadPlan === "function") loadPlan();
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", applyRoute);
@@ -876,6 +880,7 @@ async function loadSettings() {
 }
 $("#btnSettings").onclick = () => { location.hash = location.hash === "#/einstellungen" ? "" : "#/einstellungen"; };
 $("#btnBack").onclick = () => { location.hash = ""; };
+$("#btnPlan").onclick = () => { location.hash = location.hash === "#/vorsorge" ? "" : "#/vorsorge"; };
 $("#formGeneral").onsubmit = async (e) => {
   e.preventDefault();
   try {

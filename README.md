@@ -8,6 +8,7 @@ Importiert CSV-Exporte von **Relai** (Bitcoin) und **Interactive Brokers** (ETFs
 - Bewertung in Basiswährung (Standard CHF), Kostenbasis nach Durchschnittskosten-Methode
 - Duplikat-Erkennung: dieselbe Datei (oder IBKR-Statement + Flex Query) kann mehrfach importiert werden
 - Hell/Dunkel-Modus, funktioniert auch auf dem Handy
+- Spartipps & Vorsorge: Steuer-Schätzung, 3a-Stand, FIRE-/Pensionsrechner und Fristen (Kanton Zürich)
 
 ## Installation auf Proxmox (LXC)
 
@@ -102,6 +103,25 @@ Der Container braucht dafür Internetzugang zu `query1.finance.yahoo.com`.
 - Die Fonds haben meist keinen Yahoo-Kurs – bewertet wird mit dem letzten Kauf-/Verkaufskurs (bei monatlichen
   Käufen recht aktuell) oder einem manuellen Kurs (Position anklicken).
 - Der PDF-Import braucht `pdftotext` (Paket `poppler-utils`, wird von install.sh installiert).
+
+## Spartipps & Vorsorge
+
+Über das Glühbirnen-Symbol oben (oder `#/vorsorge`) öffnet sich eine eigene Ansicht:
+
+- **Als Nächstes:** kommende Fristen nach Datum (Krankenkasse 30.11., 3a/PK-Einkauf bis Jahresende,
+  Steuererklärung …) und wie viel du dieses Jahr noch in die Säule 3a einzahlen kannst – gezählt werden die
+  Einzahlungen in deinen 3a-Portfolios.
+- **Steuern sparen:** Schätzung von Einkommenssteuer, Grenzsteuersatz und Ersparnis durch 3a-Einzahlung,
+  3a-Nachzahlung und PK-Einkauf (einmalig vs. gestaffelt). Den Grenzsteuersatz aus der eigenen Steuerrechnung kannst du
+  direkt eintragen.
+- **FIRE & Pensionierung:** FIRE-Zahl, frühestes Ausstiegsalter, Brücke bis 65 inkl. AHV-Beiträgen als
+  Nichterwerbstätige und Rentenlücke. Das Vermögen wird aus den Portfolios übernommen (überschreibbar).
+- **Tipps & Tricks:** rund 45 Tipps zu Steuern, Vorsorge, Anlegen, Alltag, FIRE, Pensionierung und anstehenden
+  Gesetzesänderungen – mit persönlichen Zahlen aus dem Profil und zum Abhaken.
+
+Das Profil wird auf dem Server gespeichert (in der Datenbank, also auch in der Sicherung). Alle Tarife sind
+vereinfachte Näherungen (Stand 2026) und ersetzen keine Beratung. Weitere Kantone lassen sich in `app/static/plan.js`
+(`CANTONS`, `DEADLINES`, `TIPS` mit `canton`) ergänzen.
 
 ## Sprache & News-Ticker
 
