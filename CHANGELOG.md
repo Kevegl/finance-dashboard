@@ -3,6 +3,30 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.0.2
+
+### Neu
+- **Passwort vergessen ohne Befehle:** Bei der Einrichtung erhältst du einmalig einen Wiederherstellungscode. Mit ihm
+  setzt du auf der Anmeldeseite unter *Passwort vergessen?* ein neues Passwort. Bestehende Installationen erzeugen
+  den Code unter *Einstellungen → Wiederherstellungscode*. Im lokalen Betrieb geht es zusätzlich über
+  *Passwort zurücksetzen …* im Statusfenster.
+- **Zwei-Faktor-Anmeldung (optional)** mit einer Authenticator-App (6-stelliger Code), einzuschalten unter
+  *Einstellungen → Zwei-Faktor-Anmeldung*.
+- **Anmeldeprotokoll** unter *Einstellungen → Sitzungen*: letzte Anmeldung, Fehlversuche der letzten 30 Tage und
+  die letzten Ereignisse mit Zeit und Adresse.
+- **Server (Proxmox/LXC):** automatische Debian-Sicherheitsupdates und eine deutlich strengere Abschottung des
+  Dienstes.
+
+### Verbessert
+- Auch falsche Passwörter in den Einstellungen zählen zur Sperre nach 5 Fehlversuchen.
+- Handy: Kopfzeile mit Titel in einer Zeile und Knöpfen darunter; das Logo wird nicht mehr gequetscht.
+
+**Update:** *Einstellungen → Updates → Jetzt aktualisieren*. Danach unter *Einstellungen → Wiederherstellungscode*
+einen Code erzeugen und sicher aufbewahren.
+
+*English:* Password recovery code (no commands needed), optional two-factor sign-in, sign-in log, automatic
+security updates and stronger service hardening on servers, improved header on phones.
+
 ## 1.0.1
 
 ### Neu

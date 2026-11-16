@@ -133,11 +133,15 @@ zeigt an, dass ein Update bereitliegt.
   Version zurück. Zusätzlich gibt es den Button *Vorherige Version wiederherstellen*.
 - Lädst du von Hand einen neueren Download herunter, wird automatisch dieser verwendet.
 
-**Passwort vergessen?** Im entpackten Ordner der Python-Variante:
+**Passwort vergessen?** Ohne Befehl geht es auf zwei Wegen, deine Daten bleiben in jedem Fall erhalten:
+- Auf der Anmeldeseite *Passwort vergessen?* wählen und den **Wiederherstellungscode** eingeben
+  (siehe [Sicherheit](#sicherheit)).
+- Im **Statusfenster** auf *Passwort zurücksetzen …* klicken. Danach öffnet sich der Browser, und du legst ein
+  neues Passwort fest.
+
+Notlösung im Terminal, im entpackten Ordner der Python-Variante:
 - macOS und Linux: `FD_DATA_DIR=<Datenordner> python3 app/server.py --reset-password`
 - Windows: zuerst `set FD_DATA_DIR=%LOCALAPPDATA%\FinanzDashboard`, danach `py app\server.py --reset-password`
-
-Danach erscheint wieder die Ersteinrichtung. Deine Daten bleiben dabei erhalten.
 
 ## Docker (NAS, Raspberry Pi)
 
@@ -161,7 +165,8 @@ docker compose pull && docker compose up -d
 Alternativ automatisch mit [Watchtower](https://containrrr.dev/watchtower/).
 
 Docker läuft ohne HTTPS. Mach es deshalb nur im Heimnetz oder per VPN erreichbar und richte keine
-Portweiterleitung im Router ein. Passwort vergessen:
+Portweiterleitung im Router ein. Passwort vergessen: auf der Anmeldeseite mit dem Wiederherstellungscode
+(siehe [Sicherheit](#sicherheit)) oder, ohne Code, mit:
 
 ```bash
 docker exec finance-dashboard python3 server.py --reset-password
@@ -199,7 +204,9 @@ In `/etc/finance-dashboard.env`, danach `systemctl restart finance-dashboard`:
 | `FD_PRICE_TTL` | Kurs-Aktualisierung in Sekunden | `14400` |
 
 **Sicherheit:** `install.sh` aktiviert automatisch **HTTPS** (selbstsigniertes Zertifikat). Beim **ersten Aufruf** legst du im Browser Benutzername und Passwort fest (gespeichert als PBKDF2-Hash, Anmeldung per sicherem Sitzungs-Cookie, 30 Tage gültig). Passwort ändern, andere Geräte abmelden und CSV-Export findest du unter **Einstellungen** (Zahnrad oben rechts). Nach 5 falschen Passwörtern wird die IP 15 Minuten gesperrt.
-Passwort vergessen: im Container `cd /opt/finance-dashboard/app && FD_DATA_DIR=/var/lib/finance-dashboard python3 server.py --reset-password` – danach erscheint wieder die Ersteinrichtung.
+Passwort vergessen: auf der Anmeldeseite mit dem Wiederherstellungscode. Ohne Code im Container
+`cd /opt/finance-dashboard/app && FD_DATA_DIR=/var/lib/finance-dashboard python3 server.py --reset-password`, danach
+erscheint wieder die Ersteinrichtung. Weitere Schutzmassnahmen stehen unter [Sicherheit](#sicherheit).
 Von aussen nur über VPN (WireGuard/Tailscale) erreichbar machen, keine Portweiterleitung im Router.
 
 **Sicherung:** Unter *Einstellungen → Sicherung & Wiederherstellung* lädst du eine JSON-Datei mit allen Portfolios, Transaktionen, Ticker-Einstellungen und der Kurshistorie herunter (ohne Passwort). Nach einer Neuinstallation: Zugang einrichten → Sicherung wiederherstellen. Zusätzlich empfohlen: den Container in den Proxmox-Backup-Job aufnehmen.
@@ -364,6 +371,42 @@ Startskripte und des Docker-Images.
 Alle Installationen auf dem Kanal «Releases» (Programm, Python-Variante, Docker-Hinweis und neue
 Proxmox-Installationen) sehen die neue Version innerhalb eines Tages. Mit *Run workflow* lässt sich der
 Release-Workflow auch ohne Veröffentlichung testen. Die gebauten Dateien liegen dann als Artefakte beim Lauf.
+
+## Sicherheit
+
+**Anmeldung** (alle Varianten)
+- Benutzername und Passwort legst du beim ersten Aufruf fest. Das Passwort wird nur als PBKDF2-Hash gespeichert.
+  Nach 5 Fehlversuchen ist die Anmeldung von dieser Adresse aus 15 Minuten gesperrt.
+- **Wiederherstellungscode:** Nach der Einrichtung zeigt das Dashboard einmalig einen Code wie
+  `K7Q2M-…` an. Bewahre ihn getrennt vom Passwort auf, z.B. im Passwortmanager oder ausgedruckt. Damit setzt du auf
+  der Anmeldeseite unter *Passwort vergessen?* ein neues Passwort, ganz ohne Befehle. Danach gibt es sofort einen
+  neuen Code. Bestehende Installationen erzeugen ihren Code unter *Einstellungen → Wiederherstellungscode*.
+- **Zwei-Faktor-Anmeldung (optional):** Unter *Einstellungen → Zwei-Faktor-Anmeldung* einschalten und den
+  angezeigten Schlüssel in einer Authenticator-App eintragen (z.B. Google Authenticator, Microsoft Authenticator,
+  1Password, Bitwarden). Auf dem Handy öffnet der Link *In Authenticator-App öffnen* die App direkt. Danach
+  braucht die Anmeldung zusätzlich den 6-stelligen Code. Handy verloren? Der Wiederherstellungscode schaltet die
+  Zwei-Faktor-Anmeldung aus.
+- **Anmeldeprotokoll:** *Einstellungen → Sitzungen* zeigt die letzte Anmeldung, die Fehlversuche der letzten
+  30 Tage und ein Protokoll mit Zeit und Adresse. Auf dem Server stehen die Ereignisse zusätzlich im Systemprotokoll
+  (`journalctl -u finance-dashboard`).
+- Sitzungen laufen nach 30 Tagen ab. Unter *Einstellungen → Sitzungen* kannst du alle anderen Geräte abmelden.
+  Ein Passwortwechsel meldet sie automatisch ab.
+
+**Server-Installation (Proxmox/LXC)**
+- HTTPS mit automatisch erneuertem Zertifikat. Das Dashboard läuft als eigener Benutzer ohne Sonderrechte,
+  stark eingeschränkt durch systemd: Es darf nur in seinen Datenordner schreiben, hat keinen Zugriff auf Geräte,
+  Kernel-Einstellungen oder andere Prozesse und darf nur die nötigen Systemaufrufe nutzen.
+  Startet der Dienst in einem Container mit der vollen Einschränkung nicht, lockert `install.sh` nur die
+  container-abhängigen Optionen und meldet das.
+- **Automatische Sicherheitsupdates:** `install.sh` richtet `unattended-upgrades` ein. Damit installiert Debian
+  Sicherheitsupdates, z.B. für Python und OpenSSL, täglich selbst. Betroffene Dienste startet es danach neu.
+  Abschalten: in `/etc/apt/apt.conf.d/20auto-upgrades` beide Werte auf `"0"` setzen.
+- Updates des Dashboards laufen über einen getrennten Dienst, siehe [Updates im Dashboard](#updates-im-dashboard-proxmox).
+- Von aussen nur über VPN (WireGuard/Tailscale) erreichbar machen, keine Portweiterleitung im Router.
+
+**Lokal und Docker:** Lokal ist das Dashboard nur auf dem eigenen Computer erreichbar (`127.0.0.1`).
+Docker läuft ohne HTTPS und gehört deshalb nur ins Heimnetz oder hinter ein VPN. Aktuelle System-Bibliotheken
+kommen dort mit jedem neuen Image.
 
 ## Datenschutz
 Deine Finanzdaten bleiben auf deinem Gerät bzw. Server. Es gibt kein Benutzerkonto, keine Cloud und keine
