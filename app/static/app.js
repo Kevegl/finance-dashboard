@@ -1152,17 +1152,19 @@ function renderUpdate() {
   if (busy) html = `<span class="spin"></span>${esc(busyText)}`;
   else if (st.state === "error") { cls = "err"; html = esc(L("Fehler: ", "Error: ") + trErr(st.message || "")); }
   else if (st.behind > 0) { cls = "new"; html = esc(L(`${st.behind} ${st.behind === 1 ? "neue Version" : "neue Versionen"} verfügbar`, `${st.behind} new ${st.behind === 1 ? "version" : "versions"} available`)); }
-  else if (st.current) { cls = "ok"; html = esc(L("Auf dem neuesten Stand", "Up to date")); }
+  else if (st.current && st.last_check) { cls = "ok"; html = esc(L("Auf dem neuesten Stand", "Up to date")); }
   else html = esc(L("Noch nicht geprüft", "Not checked yet"));
   if (!busy && st.last_check) html += `<small>${esc(L("Zuletzt geprüft: ", "Last checked: ") + updDate(st.last_check))}</small>`;
   const el = $("#updState"); el.innerHTML = html; el.className = "readonly upd-state " + cls;
   const commits = st.behind > 0 ? (st.commits || []) : [];
   $("#updCommits").hidden = !commits.length;
   $("#updCommits").innerHTML = commits.map((c) => `<li>${esc(c.subject)} <small>${esc(updDate(c.date))} · <code>${esc(c.short)}</code></small></li>`).join("");
-  $("#btnUpdInstall").hidden = !(st.behind > 0);
+  const docker = st.mode === "docker";
+  $("#updDocker").hidden = !docker; $("#updHint").hidden = docker;
+  $("#btnUpdInstall").hidden = docker || !(st.behind > 0);
   $("#btnUpdInstall").disabled = busy || st.dirty || st.ahead > 0;
   $("#btnUpdCheck").disabled = busy;
-  $("#btnUpdRollback").hidden = !st.previous;
+  $("#btnUpdRollback").hidden = docker || !st.previous;
   $("#btnUpdRollback").disabled = busy;
   if (st.previous) $("#btnUpdRollback").title = `${st.previous.short} · ${st.previous.subject}`;
   const log = st.log || [];

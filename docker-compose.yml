@@ -1,0 +1,19 @@
+# Finanz-Dashboard mit Docker Compose (NAS, Raspberry Pi, Docker Desktop).
+#   Starten:      docker compose up -d          -> http://<Adresse>:8080
+#   Aktualisieren: docker compose pull && docker compose up -d
+# Die Daten liegen im Volume «fd-data» und bleiben bei Updates erhalten.
+services:
+  finance-dashboard:
+    image: ghcr.io/kevegl/finance-dashboard:latest
+    container_name: finance-dashboard
+    restart: unless-stopped
+    ports:
+      - "8080:8080"          # nur im Heimnetz/VPN freigeben, keine Portweiterleitung im Router
+    volumes:
+      - fd-data:/data
+    environment:
+      - FD_BASE_CCY=CHF
+      - TZ=Europe/Zurich
+
+volumes:
+  fd-data:

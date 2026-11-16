@@ -11,6 +11,7 @@ Umgebungsvariablen:
   FD_CERT/FD_KEY                        – Pfad zu TLS-Zertifikat/Schlüssel -> HTTPS
   FD_PRICE_TTL   (Standard 14400 s)     – wie oft Kurse automatisch aktualisiert werden
   FD_REPO_DIR                           – Git-Repository der Installation (setzt install.sh) -> Updates im Dashboard
+  FD_DOCKER=1                           – Docker-Image: meldet neue Releases, aktualisiert wird per docker pull
   FD_LOCAL=1                            – lokaler Betrieb über app/launcher.py (nur 127.0.0.1, ohne TLS,
                                           Updates über GitHub Releases, «Dashboard beenden»)
 """
@@ -67,6 +68,7 @@ COOKIE = "fd_session"
 MIN_PW = 8
 # Lokaler Betrieb (Startprogramm launcher.py): nur auf diesem Computer, Updates über GitHub Releases
 LOCAL = os.environ.get("FD_LOCAL") == "1"
+DOCKER = not LOCAL and os.environ.get("FD_DOCKER") == "1"
 APP_VERSION = local_update.norm_version(os.environ.get("FD_APP_VERSION", "")) or local_update.app_version(HERE)
 BUNDLED_VERSION = local_update.norm_version(os.environ.get("FD_BUNDLED_VERSION", ""))
 TLS_CERT = None if LOCAL else os.environ.get("FD_CERT")
@@ -1432,7 +1434,10 @@ def local_update_status():
     prev = (st.get("previous") or {}).get("commit")
     if prev and prev == APP_VERSION:
         st["previous"] = None
-    st.update(available=True, mode="release", branch="Releases", pending=False, busy=busy, ahead=0, dirty=False)
+    st.update(available=True, mode="docker" if DOCKER else "release", branch="Docker" if DOCKER else "Releases",
+              pending=False, busy=busy, ahead=0, dirty=False)
+    if DOCKER:
+        st["previous"] = None
     return st
 
 
@@ -1467,7 +1472,7 @@ def local_update_checker():
 
 def update_status():
     """Stand des Update-Dienstes für die Einstellungen (ohne Log, das gibt es separat)."""
-    if LOCAL:
+    if LOCAL or DOCKER:
         return local_update_status()
     if not REPO_DIR:
         return {"available": False}
@@ -1494,7 +1499,9 @@ def update_status():
 def request_update(action):
     if action not in UPDATE_ACTIONS:
         raise ValueError("Unbekannte Aktion")
-    if LOCAL:
+    if DOCKER and action != "check":
+        raise ValueError("Im Docker-Betrieb wird über ein neues Image aktualisiert (docker compose pull).")
+    if LOCAL or DOCKER:
         return local_request_update(action)
     if not REPO_DIR:
         raise ValueError("Updates über das Dashboard sind bei dieser Installation nicht verfügbar.")
@@ -2020,7 +2027,7 @@ def main():
         print("Anmeldung zurückgesetzt. Beim nächsten Aufruf kann ein neues Passwort festgelegt werden.")
         return
     threading.Thread(target=background_refresher, daemon=True).start()
-    if LOCAL:
+    if LOCAL or DOCKER:
         threading.Thread(target=local_update_checker, daemon=True).start()
     host = os.environ.get("FD_HOST", "127.0.0.1" if LOCAL else "0.0.0.0")
     port = int(os.environ.get("FD_PORT", str(local_update.DEFAULT_PORT) if LOCAL else "8080"))

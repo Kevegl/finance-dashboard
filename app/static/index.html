@@ -247,6 +247,7 @@
         <div class="field"><span>Status</span><div class="readonly" id="updState">–</div></div>
       </div>
       <ul class="upd-commits" id="updCommits" hidden></ul>
+      <p class="hint" id="updDocker" hidden data-i18n-html="updDocker">Im Docker-Betrieb wird das Dashboard über ein neues Image aktualisiert: <code>docker compose pull &amp;&amp; docker compose up -d</code> (oder automatisch mit Watchtower). Deine Daten im Volume bleiben erhalten.</p>
       <p class="hint" id="updHint" data-i18n-html="updHint">Täglich wird automatisch geprüft, ob es eine neue Version gibt. Installiert wird nur, wenn du auf „Jetzt aktualisieren“ klickst. Deine Daten bleiben dabei unverändert; startet das Dashboard nach dem Update nicht, wird automatisch die vorherige Version wiederhergestellt.</p>
       <div class="form-actions left">
         <button class="btn primary" id="btnUpdInstall" hidden>Jetzt aktualisieren</button>
