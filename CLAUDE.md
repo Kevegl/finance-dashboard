@@ -15,6 +15,9 @@ Sprache im Projekt: Deutsch (Schweizer Schreibweise, „ss“ statt „ß“), U
 - Updates installiert der Benutzer im Dashboard unter *Einstellungen → Updates* (Dienst `finance-dashboard-update`).
   Fallback im Container: `cd /root/finance-dashboard && git pull && bash install.sh`.
 - Nach einem Push dem Benutzer kurz sagen, was sich ändert und dass er es über *Updates* installieren kann.
+- Andere Nutzer (Programm/.exe, Python-Variante mit `start.*`, Docker, neue Proxmox-Installationen) erhalten nur
+  veröffentlichte Releases: Tag `vX.Y.Z` muss zu `app/VERSION` passen. Releases veröffentlicht der Benutzer selbst
+  auf GitHub; `.github/workflows/release.yml` baut dann Docker-Image, .exe und Mac-App.
 
 ## Datenschutz – das Repo soll später öffentlich werden
 - Niemals echte Finanzdaten committen: keine eigenen CSV/PDF-Exporte, Datenbank, Sicherungs-JSONs, Kontonummern,
@@ -24,7 +27,10 @@ Sprache im Projekt: Deutsch (Schweizer Schreibweise, „ss“ statt „ß“), U
 - Vor jedem Commit `git status` und den Diff prüfen; `.gitignore` nicht aufweichen.
 
 ## Technische Leitplanken
-- Server: nur Python 3 Standardbibliothek + SQLite (`app/server.py`, `app/importers.py`) – keine pip-Pakete.
+- Server: nur Python 3 Standardbibliothek + SQLite (`app/*.py`) – keine pip-Pakete. PyInstaller wird nur in
+  GitHub Actions zum Bauen der .exe/App benutzt (`packaging/build_app.py`). Mindestversion Python 3.9.
+- Lokaler Betrieb (`app/launcher.py`, `app/local_update.py`, `FD_LOCAL=1`) und Docker (`FD_DOCKER=1`) bei
+  Änderungen an Start, Updates oder `/api/health` mitdenken.
 - Frontend: Vanilla JS/CSS ohne Build-Schritt und ohne externe Ressourcen (CSP: `script-src 'self'`, keine Inline-Skripte).
 - Neue UI-Texte immer zweisprachig: statische Texte in `EN` bzw. `EN_HTML` (`app/static/i18n.js`), dynamische mit `L("de", "en")`,
   Server-Fehlermeldungen in `EN_ERR`.
@@ -42,6 +48,7 @@ Sprache im Projekt: Deutsch (Schweizer Schreibweise, „ss“ statt „ß“), U
 - `cd app && FD_DATA_DIR=/tmp/fd-test FD_PORT=18080 python3 server.py`, Ersteinrichtung per `/api/setup`,
   Importe mit den Dateien aus `beispiel-csv/` prüfen.
 - `python3 -m py_compile app/*.py finance-dashboard-update`, `node --check app/static/*.js`, `bash -n install.sh`.
+- `python3 tests/smoke_server.py` und `python3 tests/smoke_local.py` (laufen auch in GitHub Actions auf Windows/macOS/Linux).
 - Bei UI-Änderungen einen Screenshot (hell/dunkel, Desktop/Handy) ansehen; README bei neuen Funktionen ergänzen.
 
 ## Arbeitsteilung (Projektleiter und Arbeiter)
