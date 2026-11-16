@@ -514,3 +514,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); marg
 .plan-a3-cfg summary { cursor: pointer; color: var(--ink-2); }
 .plan-a3-cfg summary .hint { margin-left: 6px; }
 .plan-a3-cfg .plan-form { margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--surface-2); }
+.plan-year p { margin: 0; }
+.plan-year-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; margin-top: 10px; }
+.plan-year-form .field { min-width: 220px; }
+.plan-year-form .hint { flex-basis: 100%; }

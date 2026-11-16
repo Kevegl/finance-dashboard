@@ -2,23 +2,44 @@
 /* Spartipps & Vorsorge: Steuer-Schätzung, 3a-Stand, FIRE-/Pensionsrechner, Fristen und Tipp-Katalog.
    Alles wird im Browser gerechnet, gespeichert wird nur das Profil (POST /api/plan).
    Kantonsdaten stehen in CANTONS – weitere Kantone lassen sich dort ergänzen.
-   Alle Tarife sind Näherungen (Stand 2026, ohne Gewähr) und ersetzen keine Steuerberatung. */
+   Alle Tarife sind Näherungen (ohne Gewähr) und ersetzen keine Steuerberatung. */
 
-const PLAN_YEAR = 2026;
-
-/* Bundesweite Eckwerte 2026 */
-const CHV = {
-  a3Small: 7258,        // 3a mit Pensionskasse
-  a3Big: 36288,         // 3a ohne Pensionskasse (max. 20 % des Erwerbseinkommens)
-  ahvMax: 30240,        // AHV-Maximalrente Einzelperson pro Jahr (12 × 2'520)
+/* Jahreswerte. Pro Jahr genügt die AHV-Maximalrente (CHF/Monat): die 3a-Maximalbeträge sind gesetzlich daran
+   gekoppelt (24 % bzw. 120 % der jährlichen Maximalrente). Neue Jahre hier ergänzen (kommt per Update);
+   fehlt ein Jahr, gelten die Werte des letzten bekannten Jahres oder die vom Benutzer eingetragene Maximalrente. */
+const YEAR_VALUES = {
+  2026: { ahvMonth: 2520, a3Small: 7258, a3Big: 36288, ahvNe: [[350000, 530], [8850000, 26500]] },
+};
+const CH_FIXED = {
   refAge: 65,           // AHV-Referenzalter
   a3From: 60,           // 3a-Bezug frühestens 5 Jahre vor dem Referenzalter
-  ahvNe: [[350000, 530], [8850000, 26500]], // AHV-Beiträge Nichterwerbstätige (Vermögen → Beitrag), dazwischen linear genähert
 };
+const curYear = () => new Date().getFullYear();
+let CHV = null;          // Werte des laufenden Jahres, gesetzt durch setYearValues()
+function setYearValues() {
+  const y = curYear(), known = Object.keys(YEAR_VALUES).map(Number).sort((a, b) => a - b);
+  const baseYear = known.filter((k) => k <= y).pop() || known[0], base = YEAR_VALUES[baseYear];
+  const own = plan.P && ((plan.P.yearVals || {})[y] || {}).ahvMonth;
+  let v, src;
+  if (YEAR_VALUES[y]) { v = YEAR_VALUES[y]; src = "official"; }
+  else if (own > 0) {   // aus der eingetragenen AHV-Maximalrente ableiten
+    const f = own / base.ahvMonth;
+    v = { ahvMonth: own, a3Small: Math.round(own * 12 * 0.24), a3Big: Math.round(own * 12 * 1.2),
+      ahvNe: base.ahvNe.map(([w, c]) => [w, Math.round(c * f)]) };
+    src = "user";
+  } else { v = base; src = "fallback"; }
+  CHV = { ...CH_FIXED, ...v, ahvMax: v.ahvMonth * 12, year: y, baseYear, src };
+  FED = FED_BY_YEAR[Object.keys(FED_BY_YEAR).map(Number).filter((k) => k <= y).pop() || 2026];
+  CHV.fedYear = Object.keys(FED_BY_YEAR).map(Number).filter((k) => k <= y).pop() || 2026;
+}
+function cantonRate(c = canton()) {
+  const ys = Object.keys(c.rates).map(Number).sort((a, b) => a - b);
+  return c.rates[ys.filter((k) => k <= curYear()).pop() || ys[0]];
+}
 
 /* Direkte Bundessteuer 2026 (ESTV-Tabelle, Formular 58c): [ab Einkommen, Steuer an dieser Stelle, je weitere 100 CHF].
    Restbeträge unter 100 CHF fallen weg; darüber hinaus höchstens 11.5 % des Einkommens. */
-const FED = {
+const FED_BY_YEAR = { 2026: {
   single: [[15200, 0, 0.77], [33200, 138.60, 0.88], [43500, 229.20, 2.64], [58000, 612.00, 2.97], [76200, 1152.50, 5.94],
     [82100, 1502.95, 6.6], [108900, 3271.75, 8.8], [141500, 6140.55, 11], [185100, 10936.55, 13.2]],
   married: [[29700, 0, 1], [53400, 237, 2], [61300, 395, 3], [79100, 929, 4], [94900, 1561, 5], [108700, 2251, 6],
@@ -26,13 +47,14 @@ const FED = {
     [152400, 5692, 13]],
   flat: 11.5,
   child: 263,           // Elterntarif: Abzug vom Steuerbetrag pro Kind
-};
+} };
+let FED = FED_BY_YEAR[2026];
 
 /* Kantone: Tarif der einfachen Staatssteuer als [Stufenbreite, Satz in %] */
 const CANTONS = {
   ZH: {
     name: ["Zürich", "Zurich"],
-    rate: 95,           // Staatssteuerfuss 2026/2027
+    rates: { 2026: 95, 2027: 95 },   // Staatssteuerfuss nach Jahr
     muni: 119,          // Vorgabe: Stadt Zürich
     muniRange: [70, 130],
     single: [[6700, 0], [4700, 2], [4700, 3], [7600, 4], [9300, 5], [10700, 6], [12400, 7], [17000, 8],
@@ -46,7 +68,7 @@ const PLAN_DEFAULTS = {
   canton: "ZH", civil: "single", kids: 0, income: 85000, muni: 119, church: 0, marg: "",
   age: 35, pk: true, earned: 100000, buyIn: 0, buyYears: 3,
   spend: 60000, save: 20000, a3full: true, ret: 4, swr: 3.5, fireAge: 55, ahv: 28000, pkRente: 18000,
-  wealthFree: "", wealth3a: "", pf3a: "cmp", cfg3a: {}, gemeinde: "", gemVar: 0, konf: "none", taxYear: "", done: {}, cat: "all", hideDone: false,
+  wealthFree: "", wealth3a: "", pf3a: "cmp", cfg3a: {}, yearVals: {}, gemeinde: "", gemVar: 0, konf: "none", taxYear: "", done: {}, cat: "all", hideDone: false,
 };
 
 const plan = { P: null, dash: null, rates: {}, saveT: null, loading: false, open3a: new Set() };
@@ -97,7 +119,7 @@ function rates(P = plan.P, name = P.gemeinde, variant = P.gemVar) {
 function taxes(inc, P = plan.P, r = rates(P)) {
   const married = P.civil !== "single";
   const simple = cantonSimple(inc, married);
-  const cant = simple * (canton().rate + r.muni + r.church) / 100;
+  const cant = simple * (cantonRate() + r.muni + r.church) / 100;
   const fed = fedTax(inc, married, nv(P.kids));
   return { simple, cant, fed, total: cant + fed };
 }
@@ -204,27 +226,29 @@ const TIP_CATS = [
   ["all", "Alle", "All"], ["tax", "Steuern", "Taxes"], ["pension", "Vorsorge", "Pension"], ["invest", "Anlegen", "Investing"],
   ["life", "Alltag", "Everyday"], ["fire", "FIRE", "FIRE"], ["retire", "Pensionierung", "Retirement"], ["future", "Zukunft", "Outlook"],
 ];
-/* impact: 3 = gross, 2 = mittel, 1 = klein; calc(c) liefert einen persönlichen Satz aus dem Profil */
+/* impact: 3 = gross, 2 = mittel, 1 = klein; calc(c) liefert einen persönlichen Satz aus dem Profil.
+   yearly: jedes Jahr neu zu erledigen (Häkchen gilt nur für das Jahr); until: Tipp bis zu diesem Jahr anzeigen,
+   danach muss der Text überarbeitet werden. Platzhalter {a3s} {a3b} {ne0} {ne1} {y} = Werte des laufenden Jahres. */
 const TIPS = [
-  { id: "3a-max", cat: "tax", impact: 3,
-    de: ["Säule 3a jedes Jahr voll einzahlen", `Einzahlungen sind vom Einkommen abziehbar: ${num(CHV.a3Small, 0)} CHF mit Pensionskasse, ohne PK 20 % des Erwerbseinkommens (max. ${num(CHV.a3Big, 0)} CHF). Das Guthaben ist bis zum Bezug von Einkommens- und Vermögenssteuer befreit.`],
-    en: ["Max out pillar 3a every year", `Contributions are deductible: CHF ${num(CHV.a3Small, 0)} with a pension fund, without one 20 % of earned income (max. CHF ${num(CHV.a3Big, 0)}). The balance is free of income and wealth tax until withdrawal.`],
+  { id: "3a-max", yearly: true, cat: "tax", impact: 3,
+    de: ["Säule 3a jedes Jahr voll einzahlen", "Einzahlungen sind vom Einkommen abziehbar: {a3s} CHF mit Pensionskasse, ohne PK 20 % des Erwerbseinkommens (max. {a3b} CHF). Das Guthaben ist bis zum Bezug von Einkommens- und Vermögenssteuer befreit."],
+    en: ["Max out pillar 3a every year", "Contributions are deductible: CHF {a3s} with a pension fund, without one 20 % of earned income (max. CHF {a3b}). The balance is free of income and wealth tax until withdrawal."],
     calc: (c) => c.inc > 0 && L(`Bei dir: ${chf(c.a3)} einzahlen spart ca. ${chf(c.save3a)} Steuern pro Jahr.`, `For you: paying in ${chf(c.a3)} saves about ${chf(c.save3a)} in tax per year.`) },
-  { id: "3a-back", cat: "tax", impact: 3,
-    de: ["3a-Lücken nachzahlen (neu ab 2026)", "Seit 2026 lassen sich verpasste 3a-Beiträge für bis zu 10 Jahre nachzahlen – erstmals für Lücken ab 2025. Pro Jahr ist eine Nachzahlung bis zum kleinen 3a-Maximum möglich, zusätzlich zum laufenden Beitrag, der zuerst voll einbezahlt sein muss. Voraussetzung: AHV-pflichtiges Erwerbseinkommen im Lückenjahr und im Einzahlungsjahr. Die Nachzahlung ist voll abziehbar."],
-    en: ["Catch up on pillar 3a gaps (new from 2026)", "Since 2026, missed 3a contributions can be paid in retroactively for up to 10 years – starting with gaps from 2025. One catch-up payment per year up to the small 3a maximum is allowed on top of the regular contribution, which must be paid in full first. Requires AHV-liable earned income in the gap year and the payment year. The catch-up is fully deductible."],
+  { id: "3a-back", yearly: true, cat: "tax", impact: 3,
+    de: ["3a-Lücken nachzahlen (seit 2026 möglich)", "Seit 2026 lassen sich verpasste 3a-Beiträge für bis zu 10 Jahre nachzahlen – erstmals für Lücken ab 2025. Pro Jahr ist eine Nachzahlung bis zum kleinen 3a-Maximum möglich, zusätzlich zum laufenden Beitrag, der zuerst voll einbezahlt sein muss. Voraussetzung: AHV-pflichtiges Erwerbseinkommen im Lückenjahr und im Einzahlungsjahr. Die Nachzahlung ist voll abziehbar."],
+    en: ["Catch up on pillar 3a gaps (possible since 2026)", "Since 2026, missed 3a contributions can be paid in retroactively for up to 10 years – starting with gaps from 2025. One catch-up payment per year up to the small 3a maximum is allowed on top of the regular contribution, which must be paid in full first. Requires AHV-liable earned income in the gap year and the payment year. The catch-up is fully deductible."],
     calc: (c) => c.inc > 0 && L(`Bei dir: eine Nachzahlung von ${chf(CHV.a3Small)} spart zusätzlich ca. ${chf(c.saveBack)}.`, `For you: a catch-up of ${chf(CHV.a3Small)} saves about ${chf(c.saveBack)} more.`) },
-  { id: "pk-buy", cat: "tax", impact: 3,
+  { id: "pk-buy", yearly: true, cat: "tax", impact: 3,
     de: ["Pensionskassen-Einkauf gestaffelt planen", "Einkäufe in die PK sind voll abziehbar. Wegen der Progression lohnt es sich, grosse Einkäufe auf mehrere Jahre mit hohem Einkommen zu verteilen. Achtung: Nach einem Einkauf ist 3 Jahre lang kein Kapitalbezug möglich, WEF-Vorbezüge müssen zuerst zurückbezahlt werden. Deckungsgrad und Verzinsung der Kasse prüfen."],
     en: ["Plan pension fund buy-ins in stages", "Buy-ins are fully deductible. Because of progression, large buy-ins are best spread over several high-income years. Note: no lump-sum withdrawal for 3 years after a buy-in, and home-ownership withdrawals must be repaid first. Check the fund's funding ratio and interest rate."],
     calc: (c) => c.buy > 0 && c.inc > 0 && L(`Bei dir: ${chf(c.buy)} auf einmal spart ca. ${chf(c.buyOnce)}, verteilt auf ${c.years} Jahre ca. ${chf(c.buySplit)}.`, `For you: ${chf(c.buy)} at once saves about ${chf(c.buyOnce)}, spread over ${c.years} years about ${chf(c.buySplit)}.`) },
-  { id: "deductions", cat: "tax", impact: 2,
+  { id: "deductions", yearly: true, cat: "tax", impact: 2,
     de: ["Alle Abzüge ausschöpfen", "Effektive Berufskosten statt Pauschale, wenn höher (Arbeitsweg, auswärtige Verpflegung, Homeoffice nur mit Auflagen). Weiterbildungskosten, Kinderdrittbetreuung, Krankheits- und Zahnarztkosten über dem Selbstbehalt von 5 % des Nettoeinkommens, Schuldzinsen und Liegenschaftsunterhalt. Belege über das Jahr sammeln."],
     en: ["Use every deduction", "Actual work expenses instead of the flat rate when higher (commute, meals away from home). Further training, third-party childcare, medical and dental costs above 5 % of net income, debt interest and property maintenance. Collect receipts throughout the year."] },
-  { id: "donations", cat: "tax", impact: 1,
+  { id: "donations", yearly: true, cat: "tax", impact: 1,
     de: ["Spenden bündeln", "Spenden an steuerbefreite gemeinnützige Organisationen sind bis 20 % des Nettoeinkommens abziehbar (ab 100 CHF pro Jahr). Wer regelmässig spendet, kann mehrere Jahresbeträge in einem Jahr zusammenfassen."],
     en: ["Bundle donations", "Donations to tax-exempt charities are deductible up to 20 % of net income (from CHF 100 per year). Regular donors can combine several years' worth into one year."] },
-  { id: "withholding", cat: "tax", impact: 2,
+  { id: "withholding", yearly: true, cat: "tax", impact: 2,
     de: ["Verrechnungs- und Quellensteuern zurückholen", "Die 35 % Verrechnungssteuer auf Schweizer Dividenden und Zinsen gibt es über das Wertschriftenverzeichnis zurück – alle Konten und Depots deklarieren. Bei US-Aktien im IBKR-Depot das Formular W-8BEN ausfüllen (15 % statt 30 % US-Quellensteuer); die 15 % lassen sich über das Formular DA-1 anrechnen."],
     en: ["Reclaim withholding taxes", "The 35 % Swiss withholding tax on dividends and interest is refunded via the securities list – declare all accounts. For US shares at IBKR file the W-8BEN form (15 % instead of 30 % US withholding); the 15 % can be credited using form DA-1."] },
   { id: "accumulating", cat: "tax", impact: 1,
@@ -233,14 +257,14 @@ const TIPS = [
   { id: "pro-trader", cat: "tax", impact: 2,
     de: ["Nicht als gewerbsmässiger Wertschriftenhändler gelten", "Kapitalgewinne bleiben steuerfrei, solange du privat anlegst. Risikofaktoren: Haltedauer unter 6 Monaten, Jahresvolumen über dem Fünffachen des Depots, Kapitalgewinne über 50 % des Einkommens, Fremdfinanzierung oder Derivate über Absicherung hinaus. Langfristiges Buy-and-Hold ist unproblematisch."],
     en: ["Avoid being classed as a professional trader", "Capital gains stay tax-free as long as you invest privately. Risk factors: holding periods under 6 months, annual volume above five times the portfolio, gains above 50 % of income, leverage or derivatives beyond hedging. Long-term buy-and-hold is fine."] },
-  { id: "crypto", cat: "tax", impact: 1,
+  { id: "crypto", yearly: true, cat: "tax", impact: 1,
     de: ["Krypto richtig deklarieren", "Bitcoin gehört ins Wertschriftenverzeichnis und unterliegt der Vermögenssteuer zum ESTV-Jahresendkurs. Private Kursgewinne sind steuerfrei, Staking- oder Mining-Erträge dagegen Einkommen. Kaufbelege (z.B. Relai-Export) aufbewahren."],
     en: ["Declare crypto correctly", "Bitcoin belongs in the securities list and is subject to wealth tax at the ESTV year-end rate. Private price gains are tax-free, staking or mining income is taxable. Keep purchase records (e.g. the Relai export)."] },
   { id: "zh-muni", cat: "tax", impact: 2, canton: "ZH",
     de: ["Wohngemeinde zählt", "Die Gemeindesteuerfüsse im Kanton Zürich reichen von rund 70 % bis 130 % der einfachen Staatssteuer. Bei einem Umzug lohnt sich ein Vergleich – auch Kirchensteuer, Mieten und Pendelkosten einbeziehen. Mit der hochgeladenen Steuerfuss-Tabelle vergleicht das Dashboard alle Gemeinden."],
     en: ["Your municipality matters", "Municipal tax rates in the Canton of Zurich range from about 70 % to 130 % of the simple cantonal tax. Compare when you move – including church tax, rents and commuting costs. With the uploaded rate table the dashboard compares all municipalities."],
     calc: (c) => c.inc > 0 && L(`Bei dir: 10 Prozentpunkte Gemeindesteuerfuss entsprechen ca. ${chf(c.muni10)} pro Jahr.`, `For you: 10 percentage points of municipal rate equal about ${chf(c.muni10)} per year.`) },
-  { id: "zh-prepay", cat: "tax", impact: 1, canton: "ZH",
+  { id: "zh-prepay", yearly: true, cat: "tax", impact: 1, canton: "ZH",
     de: ["Steuern im Kanton Zürich früh bezahlen", "Vorauszahlungen vor dem Fälligkeitstermin (30. September) werden mit einem Vergütungszins belohnt, verspätete Zahlungen kosten Verzugszins. Wer Liquidität hat, zahlt die provisorische Rechnung früh."],
     en: ["Pay Canton of Zurich taxes early", "Payments before the due date (30 September) earn interest, late payments cost default interest. If you have the cash, pay the provisional bill early."] },
   { id: "wealth-tax", cat: "tax", impact: 1, canton: "ZH",
@@ -256,7 +280,7 @@ const TIPS = [
   { id: "ik", cat: "pension", impact: 2,
     de: ["AHV-Kontoauszug bestellen", "Den individuellen Kontoauszug (IK) gratis bei der Ausgleichskasse bzw. auf ahv-iv.ch bestellen. Beitragslücken lassen sich nur 5 Jahre rückwirkend schliessen – jedes fehlende Jahr kürzt die AHV-Rente lebenslang um etwa 1/44."],
     en: ["Order your AHV account statement", "Order the individual account statement (IK) free of charge from your compensation office or via ahv-iv.ch. Contribution gaps can only be closed 5 years back – each missing year cuts the AHV pension by about 1/44 for life."] },
-  { id: "pk-cert", cat: "pension", impact: 2,
+  { id: "pk-cert", yearly: true, cat: "pension", impact: 2,
     de: ["Vorsorgeausweis lesen", "Jährlich prüfen: Altersguthaben, Verzinsung, Umwandlungssatz (überobligatorisch oft deutlich unter 6.8 %), Einkaufspotenzial, Risikoleistungen und ob ein Kapitalbezug möglich ist und bis wann er angemeldet werden muss."],
     en: ["Read your pension certificate", "Check yearly: retirement assets, interest, conversion rate (often well below 6.8 % for extra-mandatory parts), buy-in potential, risk benefits and whether and by when a lump sum must be requested."] },
   { id: "vested", cat: "pension", impact: 2,
@@ -284,13 +308,13 @@ const TIPS = [
     de: ["ETF-Domizil beachten", "Irische ETFs verlieren 15 % US-Quellensteuer auf Fondsebene, die nicht zurückgeholt werden kann. US-domizilierte ETFs (z.B. via IBKR) erlauben die Anrechnung über DA-1, haben aber ein US-Erbschaftssteuerrisiko; das Abkommen Schweiz–USA mildert dieses. Erst ab grösseren Beträgen relevant."],
     en: ["Mind the ETF domicile", "Irish ETFs lose 15 % US withholding tax at fund level that can't be reclaimed. US-domiciled ETFs (e.g. via IBKR) allow crediting via DA-1 but carry US estate tax risk, mitigated by the Swiss–US treaty. Only relevant for larger amounts."] },
 
-  { id: "health", cat: "life", impact: 3,
+  { id: "health", yearly: true, cat: "life", impact: 3,
     de: ["Krankenkasse jedes Jahr optimieren", "Grundversicherung ist überall identisch – nur der Preis unterscheidet sich. Hausarzt- oder Telmed-Modelle sparen oft 10–20 %. Die höchste Franchise (2'500 CHF) lohnt sich meist, wenn deine jährlichen Gesundheitskosten unter etwa 2'000 CHF liegen – die Differenz dann als Reserve beiseitelegen."],
     en: ["Optimise health insurance every year", "Basic cover is identical everywhere – only the price differs. GP or telemedicine models often save 10–20 %. The highest deductible (CHF 2,500) usually pays off if your annual health costs are below about CHF 2,000 – set the difference aside as a reserve."] },
   { id: "accident", cat: "life", impact: 1,
     de: ["Unfalldeckung ausschliessen", "Wer mindestens 8 Stunden pro Woche beim gleichen Arbeitgeber angestellt ist, ist über UVG gegen Unfall versichert. Die Unfalldeckung in der Krankenkasse lässt sich dann ausschliessen – das spart einige Prozent Prämie."],
     en: ["Exclude accident cover", "Employees working at least 8 hours a week for one employer are covered by UVG accident insurance. The accident cover in the health insurance can then be excluded – saving a few percent of premium."] },
-  { id: "insurance", cat: "life", impact: 1,
+  { id: "insurance", yearly: true, cat: "life", impact: 1,
     de: ["Versicherungen entrümpeln", "Doppelte Deckungen suchen (Reise-, Annullierungs- und Mietwagenschutz über Kreditkarte, Privathaftpflicht im Haushalt), Hausrat-Summe an den echten Wert anpassen und Kombi-Rabatte vergleichen."],
     en: ["Declutter insurance", "Look for duplicate cover (travel, cancellation and rental car cover via credit card, liability within the household), match contents cover to actual value and compare bundle discounts."] },
   { id: "pay-first", cat: "life", impact: 2,
@@ -306,8 +330,8 @@ const TIPS = [
     en: ["Your FIRE number", "Required wealth = annual expenses ÷ withdrawal rate. The well-known 4 % rule comes from 30-year US data; for very early retirement and CHF investors 3–3.5 % is more cautious."],
     calc: (c) => c.spend > 0 && L(`Bei dir: ${chf(c.fireNum)} bei ${pctS(c.swr)} Entnahme.`, `For you: ${chf(c.fireNum)} at ${pctS(c.swr)} withdrawal.`) },
   { id: "fire-ahv", cat: "fire", impact: 3,
-    de: ["AHV-Beiträge als Nichterwerbstätige zahlen", "Wer vor 65 aufhört zu arbeiten, bleibt bis zum Referenzalter beitragspflichtig – berechnet nach Vermögen (2026 von rund 530 bis 26'500 CHF pro Jahr). Selbst bei der Ausgleichskasse anmelden, sonst drohen Lücken und Nachforderungen. Verheiratete sind befreit, wenn der Partner mindestens den doppelten Mindestbeitrag einzahlt."],
-    en: ["Pay AHV contributions as non-employed", "Anyone who stops working before 65 must keep paying contributions until reference age – based on wealth (2026 from about CHF 530 to 26,500 a year). Register with the compensation office yourself, or gaps and back claims follow. Married people are exempt if the partner pays at least twice the minimum."],
+    de: ["AHV-Beiträge als Nichterwerbstätige zahlen", "Wer vor 65 aufhört zu arbeiten, bleibt bis zum Referenzalter beitragspflichtig – berechnet nach Vermögen ({y} von rund {ne0} bis {ne1} CHF pro Jahr). Selbst bei der Ausgleichskasse anmelden, sonst drohen Lücken und Nachforderungen. Verheiratete sind befreit, wenn der Partner mindestens den doppelten Mindestbeitrag einzahlt."],
+    en: ["Pay AHV contributions as non-employed", "Anyone who stops working before 65 must keep paying contributions until reference age – based on wealth ({y} from about CHF {ne0} to {ne1} a year). Register with the compensation office yourself, or gaps and back claims follow. Married people are exempt if the partner pays at least twice the minimum."],
     calc: (c) => c.wealth > 0 && L(`Bei deinem heutigen Vermögen ca. ${chf(ahvNonEmployed(c.wealth))} pro Jahr (Näherung).`, `With your current wealth about ${chf(ahvNonEmployed(c.wealth))} per year (estimate).`) },
   { id: "fire-bridge", cat: "fire", impact: 3,
     de: ["Brücke bis 60 bzw. 65 planen", "3a ist frühestens 5 Jahre vor dem Referenzalter beziehbar, die PK je nach Reglement ab 58, die AHV ab 63 (mit Kürzung). Bis dahin muss freies Vermögen reichen. Dafür eignen sich Anlagen mit tiefer Ausschüttung: Kursgewinne sind steuerfrei, Dividenden und Zinsen nicht."],
@@ -338,13 +362,13 @@ const TIPS = [
     de: ["Wohnort im Alter vergleichen", "Kapitalbezugs- und Vermögenssteuer unterscheiden sich zwischen Kantonen und Gemeinden stark. Massgebend ist der Wohnsitz im Zeitpunkt des Bezugs."],
     en: ["Compare where to live in retirement", "Lump-sum and wealth taxes differ widely between cantons and municipalities. What counts is your residence at the time of withdrawal."] },
 
-  { id: "imputed-rent", cat: "future", impact: 2,
+  { id: "imputed-rent", until: 2028, cat: "future", impact: 2,
     de: ["Eigenmietwert fällt weg", "Das Stimmvolk hat am 28. September 2025 die Abschaffung des Eigenmietwerts angenommen; das Inkrafttreten ist noch festzulegen (frühestens 2028). Danach sind Schuldzinsen und Unterhaltskosten selbst bewohnter Liegenschaften nicht mehr abziehbar – grössere Renovationen eher vorziehen und die Amortisationsstrategie neu beurteilen."],
     en: ["Imputed rental value is going", "Voters approved abolishing the imputed rental value on 28 September 2025; the effective date is still to be set (2028 at the earliest). Afterwards, mortgage interest and maintenance on owner-occupied homes are no longer deductible – consider bringing larger renovations forward and rethink amortisation."] },
-  { id: "individual", cat: "future", impact: 1,
+  { id: "individual", until: 2030, cat: "future", impact: 1,
     de: ["Individualbesteuerung kommt", "Am 8. März 2026 wurde die Individualbesteuerung angenommen; der Zeitpunkt der Umsetzung ist noch offen. Doppelverdiener-Ehepaare dürften entlastet, Einverdiener-Haushalte eher belastet werden. Bei der Aufteilung von Arbeitspensen langfristig mitdenken."],
     en: ["Individual taxation is coming", "Individual taxation was approved on 8 March 2026; the implementation date is still open. Dual-income couples should benefit, single-earner households may pay more. Factor this into long-term work-split decisions."] },
-  { id: "ahv13", cat: "future", impact: 1,
+  { id: "ahv13", until: 2027, cat: "future", impact: 1,
     de: ["13. AHV-Rente ab Dezember 2026", "Die 13. AHV-Rente wird ab 2026 jeweils im Dezember ausbezahlt (ein Zwölftel der Jahresrente zusätzlich). Die Finanzierung ist politisch noch umstritten."],
     en: ["13th AHV pension from December 2026", "The 13th AHV pension is paid out every December from 2026 (an extra twelfth of the annual pension). Its financing is still politically disputed."] },
   { id: "pk-rates", cat: "future", impact: 2,
@@ -353,7 +377,7 @@ const TIPS = [
   { id: "lump-tax", cat: "future", impact: 1,
     de: ["Politik rund um Kapitalbezüge verfolgen", "Eine höhere Besteuerung von Kapitalbezügen aus der Vorsorge wird im Bund immer wieder diskutiert. Wer in den nächsten Jahren bezieht, sollte die Entwicklung verfolgen und flexibel bleiben."],
     en: ["Follow the politics of lump sums", "Higher taxation of pension lump sums keeps coming up at federal level. Anyone withdrawing in the coming years should follow developments and stay flexible."] },
-  { id: "women65", cat: "future", impact: 1,
+  { id: "women65", until: 2028, cat: "future", impact: 1,
     de: ["Referenzalter Frauen", "Mit der AHV 21 steigt das Referenzalter der Frauen schrittweise auf 65 (Jahrgänge 1961–1963 als Übergang, mit Rentenzuschlag). Für Paare beeinflusst das die Planung von Bezügen und Brücke."],
     en: ["Women's reference age", "Under AHV 21 the women's reference age rises gradually to 65 (birth years 1961–1963 transitional, with a pension supplement). For couples this affects the timing of withdrawals and the bridge."] },
 ];
@@ -365,7 +389,7 @@ async function loadPlan() {
   try {
     if (!plan.P) {
       const saved = await api("/api/plan").catch(() => ({}));
-      plan.P = { ...PLAN_DEFAULTS, ...saved, done: { ...(saved.done || {}) }, cfg3a: { ...(saved.cfg3a || {}) } };
+      plan.P = { ...PLAN_DEFAULTS, ...saved, done: { ...(saved.done || {}) }, cfg3a: { ...(saved.cfg3a || {}) }, yearVals: { ...(saved.yearVals || {}) } };
       plan.rates = await api("/api/muni-rates").catch(() => ({}));
     }
     renderPlan();
@@ -410,6 +434,26 @@ function field(k, label, opts = {}) {
   return `<label class="field">${label}<input type="number" inputmode="decimal" step="any" data-k="${k}" value="${esc(v)}"
     ${opts.ph != null ? `placeholder="${esc(opts.ph)}"` : ""} class="${opts.amt ? "amt" : ""}">${hint}</label>`;
 }
+/* Hinweis, wenn für das laufende Jahr noch keine amtlichen Werte hinterlegt sind */
+function yearBanner() {
+  const y = CHV.year, fedOld = CHV.fedYear < y;
+  if (CHV.src === "official" && !fedOld) return "";
+  const own = CHV.src === "user";
+  return `<div class="banner plan-year">
+    <p>${own ? L(`<b>Werte ${y} aus deiner Eingabe:</b> AHV-Maximalrente ${num(CHV.ahvMonth, 0)} CHF/Monat → 3a-Maximum ${num(CHV.a3Small, 0)} / ${num(CHV.a3Big, 0)} CHF.`,
+        `<b>${y} values from your input:</b> maximum AHV pension CHF ${num(CHV.ahvMonth, 0)}/month → 3a maximum CHF ${num(CHV.a3Small, 0)} / ${num(CHV.a3Big, 0)}.`)
+      : CHV.src === "fallback" ? L(`<b>Für ${y} sind noch keine amtlichen Werte hinterlegt</b> – es gelten die Werte ${CHV.baseYear} (3a-Maximum ${num(CHV.a3Small, 0)} CHF). Trage die neue AHV-Maximalrente ein, dann werden die 3a-Maximalbeträge daraus berechnet.`,
+        `<b>No official values for ${y} yet</b> – ${CHV.baseYear} values apply (3a maximum CHF ${num(CHV.a3Small, 0)}). Enter the new maximum AHV pension and the 3a maximums are derived from it.`) : ""}
+      ${fedOld ? L(` Die Bundessteuer rechnet noch mit dem Tarif ${CHV.fedYear}.`, ` Federal tax still uses the ${CHV.fedYear} tariff.`) : ""}
+      ${L("Die amtlichen Werte kommen mit einem Update des Dashboards.", "Official values arrive with a dashboard update.")}</p>
+    ${CHV.src !== "official" ? `<form class="plan-year-form" id="plYearForm">
+      <label class="field">${L(`AHV-Maximalrente ${y} (CHF pro Monat)`, `Maximum AHV pension ${y} (CHF per month)`)}<input type="number" name="m" min="1000" max="10000" step="1" value="${own ? CHV.ahvMonth : ""}" placeholder="${num(YEAR_VALUES[CHV.baseYear].ahvMonth, 0)}"></label>
+      <button class="btn primary small" type="submit">${L("Übernehmen", "Apply")}</button>
+      ${own ? `<button class="btn ghost small" type="button" id="plYearReset">${L("Zurücksetzen", "Reset")}</button>` : ""}
+      <span class="hint">${L("Steht in der Medienmitteilung des Bundesrats zur Rentenanpassung oder auf ahv-iv.ch.", "Published in the Federal Council's press release on pension adjustments or on ahv-iv.ch.")}</span>
+    </form>` : ""}</div>`;
+}
+
 /* Gemeinde aus hochgeladener Steuerfuss-Tabelle oder manuelle Steuerfüsse */
 function muniFields(c) {
   const P = plan.P, t = muniTable(), vs = muniVariants(), r = rates();
@@ -496,13 +540,14 @@ async function uploadMuniCsv(file) {
 function renderPlan() {
   const root = $("#planView");
   if (!root || !plan.P) return;
+  setYearValues();
   const P = plan.P, c = canton();
   root.innerHTML = `
   <div class="settings-head">
     <button class="btn ghost" id="planBack">${L("← Zurück zum Dashboard", "← Back to dashboard")}</button>
     <div>
       <h2>${L("Spartipps & Vorsorge", "Savings tips & retirement")}</h2>
-      <p class="hint">${L(`Steuern, Vorsorge, FIRE und Pensionierung · Kanton ${c.name[0]} · Zahlen Stand ${PLAN_YEAR}`, `Taxes, pensions, FIRE and retirement · Canton of ${c.name[1]} · figures as of ${PLAN_YEAR}`)}</p>
+      <p class="hint">${L(`Steuern, Vorsorge, FIRE und Pensionierung · Kanton ${c.name[0]} · Werte ${CHV.src === "official" ? CHV.year : CHV.baseYear}`, `Taxes, pensions, FIRE and retirement · Canton of ${c.name[1]} · values ${CHV.src === "official" ? CHV.year : CHV.baseYear}`)}</p>
     </div>
     <label class="field plan-canton">${L("Kanton", "Canton")}<select data-k="canton">${Object.entries(CANTONS).map(([k, x]) =>
       `<option value="${k}" ${k === P.canton ? "selected" : ""}>${L(x.name[0], x.name[1])}</option>`).join("")}
@@ -510,6 +555,7 @@ function renderPlan() {
   </div>
   <p class="plan-note">${L("Alle Berechnungen sind Näherungen mit vereinfachten Tarifen und ersetzen keine Steuer- oder Anlageberatung. Massgebend sind die Veranlagung und die Reglemente deiner Vorsorgeeinrichtungen.",
     "All calculations are estimates using simplified tariffs and are no substitute for tax or investment advice. The tax assessment and your pension funds' rules are what count.")}</p>
+  ${yearBanner()}
 
   <section class="plan-grid">
     <div class="plan-col">
@@ -577,6 +623,17 @@ function renderPlan() {
       renderPlanResults(); savePlan();
     });
   });
+  const yf = $("#plYearForm");
+  if (yf) {
+    yf.onsubmit = (e) => {
+      e.preventDefault();
+      const m = Number(yf.elements.m.value);
+      if (!(m >= 1000 && m <= 10000)) { toast(L("Bitte eine Monatsrente zwischen 1'000 und 10'000 CHF eingeben.", "Please enter a monthly pension between CHF 1,000 and 10,000.")); return; }
+      plan.P.yearVals[curYear()] = { ahvMonth: m }; savePlan(); renderPlan();
+    };
+    const rs = $("#plYearReset");
+    if (rs) rs.onclick = () => { delete plan.P.yearVals[curYear()]; savePlan(); renderPlan(); };
+  }
   $("#plMuniFile").onchange = async (e) => {
     const f = e.target.files[0]; e.target.value = "";
     if (f) try { await uploadMuniCsv(f); } catch (ex) { toast(ex.message, 6000); }
@@ -607,6 +664,7 @@ function planCtx() {
 
 function renderPlanResults() {
   if (!$("#plTax")) return;
+  setYearValues();
   const c = planCtx();
   renderDeadlines(c); renderTax(c); renderFire(c); renderTips(c);
 }
@@ -694,7 +752,7 @@ function renderTax(c) {
   box.innerHTML = `<div class="plan-kvs">
       ${kv(L("Einkommenssteuer total", "Total income tax"), chf(c.t.total), L(`${pctS(c.t.total / c.inc * 100)} im Schnitt`, `${pctS(c.t.total / c.inc * 100)} on average`))}
       ${kv(L("Grenzsteuersatz", "Marginal tax rate"), pctS(c.marg * 100), own ? L("eigener Wert", "own value") : L("auf die nächsten 1'000 CHF", "on the next CHF 1,000"))}
-      ${kv(L("Kanton & Gemeinde", "Canton & municipality"), chf(c.t.cant), L(`Steuerfuss ${num(canton().rate + c.r.muni + c.r.church, 0)} %`, `Rate ${num(canton().rate + c.r.muni + c.r.church, 0)} %`))}
+      ${kv(L("Kanton & Gemeinde", "Canton & municipality"), chf(c.t.cant), L(`Steuerfuss ${num(cantonRate() + c.r.muni + c.r.church, 0)} %`, `Rate ${num(cantonRate() + c.r.muni + c.r.church, 0)} %`))}
       ${kv(L("Direkte Bundessteuer", "Federal income tax"), chf(c.t.fed))}
     </div>
     <table class="table plan-table"><thead><tr><th>${L("Massnahme", "Measure")}</th><th class="num">${L("Ersparnis pro Jahr", "Saving per year")}</th></tr></thead>
@@ -740,25 +798,30 @@ function renderFire(c) {
 function renderTips(c = planCtx()) {
   const P = plan.P, cats = $("#plCats");
   if (!cats) return;
-  const list = TIPS.filter((t) => !t.canton || t.canton === P.canton);
+  const y = curYear(), list = TIPS.filter((t) => (!t.canton || t.canton === P.canton) && (!t.until || y <= t.until));
+  const isDone = (t) => { const v = P.done[t.id]; return !!v && (!t.yearly || (v === true ? 2026 : v) === y); };
+  const fill = (txt) => txt.replace(/\{(a3s|a3b|ne0|ne1|y)\}/g, (_, k) => ({ a3s: num(CHV.a3Small, 0), a3b: num(CHV.a3Big, 0),
+    ne0: num(CHV.ahvNe[0][1], 0), ne1: num(CHV.ahvNe[1][1], 0), y: String(y) })[k]);
   const counts = {}; for (const t of list) counts[t.cat] = (counts[t.cat] || 0) + 1;
   cats.innerHTML = TIP_CATS.map(([k, de, en]) => `<button role="tab" data-cat="${k}" class="${P.cat === k ? "on" : ""}" aria-selected="${P.cat === k}">${L(de, en)}<small>${k === "all" ? list.length : counts[k] || 0}</small></button>`).join("");
   cats.querySelectorAll("button").forEach((b) => (b.onclick = () => { P.cat = b.dataset.cat; renderTips(); savePlan(); }));
-  const shown = list.filter((t) => (P.cat === "all" || t.cat === P.cat) && !(P.hideDone && P.done[t.id]))
-    .sort((a, b) => (!!P.done[a.id] - !!P.done[b.id]) || b.impact - a.impact);
+  const shown = list.filter((t) => (P.cat === "all" || t.cat === P.cat) && !(P.hideDone && isDone(t)))
+    .sort((a, b) => (isDone(a) - isDone(b)) || b.impact - a.impact);
   const catName = (k) => { const x = TIP_CATS.find((y) => y[0] === k); return L(x[1], x[2]); };
   const imp = (n) => [L("klein", "small"), L("mittel", "medium"), L("gross", "high")][n - 1];
   $("#plTips").innerHTML = shown.length ? shown.map((t) => {
-    const [title, text] = LANG === "en" ? t.en : t.de, extra = t.calc ? t.calc(c) : "";
-    return `<article class="plan-tip ${P.done[t.id] ? "done" : ""}">
-      <label class="plan-tip-check" title="${L("Erledigt", "Done")}"><input type="checkbox" data-done="${t.id}" ${P.done[t.id] ? "checked" : ""} aria-label="${L("Erledigt", "Done")}: ${esc(title)}"></label>
+    const [title, text0] = LANG === "en" ? t.en : t.de, text = fill(text0), extra = t.calc ? t.calc(c) : "", done = isDone(t);
+    const doneLbl = t.yearly ? L(`Erledigt ${y}`, `Done ${y}`) : L("Erledigt", "Done");
+    return `<article class="plan-tip ${done ? "done" : ""}">
+      <label class="plan-tip-check" title="${doneLbl}"><input type="checkbox" data-done="${t.id}" ${done ? "checked" : ""} aria-label="${doneLbl}: ${esc(title)}"></label>
       <div><div class="plan-tip-head"><b>${esc(title)}</b>
         <span class="plan-tag imp${t.impact}">${L("Wirkung", "Impact")}: ${imp(t.impact)}</span>
-        <span class="plan-tag">${catName(t.cat)}</span>${t.canton ? `<span class="plan-tag">${t.canton}</span>` : ""}</div>
+        <span class="plan-tag">${catName(t.cat)}</span>${t.yearly ? `<span class="plan-tag" title="${L("Häkchen gilt nur für das laufende Jahr", "Tick applies to the current year only")}">${L("jährlich", "yearly")}</span>` : ""}${t.canton ? `<span class="plan-tag">${t.canton}</span>` : ""}</div>
       <p>${esc(text)}</p>${extra ? `<p class="plan-win">${extra}</p>` : ""}</div></article>`;
   }).join("") : `<p class="hint">${L("Alles erledigt in dieser Kategorie 🎉", "All done in this category 🎉")}</p>`;
   $("#plTips").querySelectorAll("[data-done]").forEach((el) => (el.onchange = () => {
-    if (el.checked) P.done[el.dataset.done] = true; else delete P.done[el.dataset.done];
+    const t = TIPS.find((x) => x.id === el.dataset.done);
+    if (el.checked) P.done[t.id] = t.yearly ? y : true; else delete P.done[t.id];
     renderTips(); savePlan();
   }));
 }
