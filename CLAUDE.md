@@ -35,7 +35,8 @@ Sprache im Projekt: Deutsch (Schweizer Schreibweise, „ss“ statt „ß“), U
 - Sicherheit beibehalten: Dienst läuft als Benutzer `finance` mit systemd-Härtung; Login-Pflicht für alle `/api/`-Endpunkte;
   POST nur als JSON von gleicher Herkunft. Das Dashboard bekommt keine root-Rechte – privilegierte Aufgaben laufen über
   separate root-Dienste mit eng begrenzten Aufträgen (Muster: `finance-dashboard-update`).
-- Externe Abfragen nur serverseitig (Yahoo Finance für Kurse, Google News für den Ticker), nie direkt aus dem Browser.
+- Externe Abfragen nur serverseitig (Yahoo Finance für Kurse, Google News für den Ticker, offene Daten des Statistischen
+  Amts ZH für Gemeindesteuerfüsse), nie direkt aus dem Browser.
 
 ## Testen vor dem Push
 - `cd app && FD_DATA_DIR=/tmp/fd-test FD_PORT=18080 python3 server.py`, Ersteinrichtung per `/api/setup`,

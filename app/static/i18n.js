@@ -170,6 +170,7 @@ const EN_ERR = {
   "Ungültige Daten": "Invalid data",
   "Daten zu gross": "Data too large",
   "Keine Steuerfüsse gefunden": "No tax rates found",
+  "Unerwartetes Format der Steuerfuss-Daten": "Unexpected format of the tax rate data",
   "Unbekannte Aktion": "Unknown action",
   "Updates über das Dashboard sind bei dieser Installation nicht verfügbar.": "Updates via the dashboard are not available for this installation.",
   "Der letzte Lauf wurde unterbrochen.": "The last run was interrupted.",
@@ -205,6 +206,7 @@ const EN_ERR = {
   "Das Passwort muss mindestens 8 Zeichen lang sein.": "The password must be at least 8 characters long.",
 };
 const EN_ERR_RX = [
+  [/^Steuerfüsse konnten nicht geladen werden: /, "Tax rates could not be loaded: "],
   [/^Zeile (\d+): Datum unlesbar$/, "Row $1: unreadable date"],
   [/^Zeile (\d+): unvollständig$/, "Row $1: incomplete"],
   [/^Zeile (\d+): (.*) übersprungen \(kein Kauf\/Verkauf\)$/, "Row $1: $2 skipped (not a buy/sell)"],

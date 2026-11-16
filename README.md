@@ -114,8 +114,11 @@ Der Container braucht dafür Internetzugang zu `query1.finance.yahoo.com`.
 - **Steuern sparen:** Schätzung von Einkommenssteuer, Grenzsteuersatz und Ersparnis durch 3a-Einzahlung,
   3a-Nachzahlung und PK-Einkauf (einmalig vs. gestaffelt). Den Grenzsteuersatz aus der eigenen Steuerrechnung kannst du
   direkt eintragen.
-- **Gemeindesteuerfüsse:** Im Profil die CSV der Gemeindesteuerfüsse des Kantonalen Steueramts hochladen
-  (`zh.ch/steuerfuesse`, das Jahr wird aus dem Dateinamen gelesen, mehrere Jahre möglich). Danach Wohngemeinde und
+- **Gemeindesteuerfüsse:** Für den Kanton Zürich holt der Server die aktuellen Steuerfüsse automatisch (höchstens
+  einmal täglich) aus den offenen Daten des Statistischen Amts (`www.web.statistik.zh.ch`, Datensatz «Steuerfüsse der
+  Zürcher Gemeinden» auf opendata.swiss). Neue Jahre erscheinen, sobald der Kanton sie publiziert; im Profil lässt sich
+  der Abruf auslösen oder abschalten. Alternativ die CSV manuell hochladen (das Jahr wird aus dem Dateinamen gelesen,
+  hochgeladene Tabellen werden vom Abruf nicht überschrieben). Danach Wohngemeinde und
   Konfession wählen; Gemeinden mit mehreren Steuerfüssen (Schul-/Kirchgemeinden) bieten eine Variantenauswahl.
   Zusätzlich gibt es einen Vergleich mit den günstigsten und teuersten Gemeinden.
 - **Mehrere 3a-Konten:** z.B. eigenes und Partner-Konto einzeln anzeigen oder vergleichen; pro Konto lassen sich

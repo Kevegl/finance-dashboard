@@ -71,7 +71,7 @@ const PLAN_DEFAULTS = {
   wealthFree: "", wealth3a: "", pf3a: "cmp", cfg3a: {}, yearVals: {}, gemeinde: "", gemVar: 0, konf: "none", taxYear: "", done: {}, cat: "all", hideDone: false,
 };
 
-const plan = { P: null, dash: null, rates: {}, saveT: null, loading: false, open3a: new Set() };
+const plan = { P: null, dash: null, rates: {}, muni: {}, saveT: null, loading: false, open3a: new Set() };
 
 /* ---------- Hilfen ---------- */
 const chf = (v) => (state.hide ? `CHF ${HIDDEN}` : money(Math.round(v || 0), "CHF", { dec: 0 }));
@@ -390,13 +390,21 @@ async function loadPlan() {
     if (!plan.P) {
       const saved = await api("/api/plan").catch(() => ({}));
       plan.P = { ...PLAN_DEFAULTS, ...saved, done: { ...(saved.done || {}) }, cfg3a: { ...(saved.cfg3a || {}) }, yearVals: { ...(saved.yearVals || {}) } };
-      plan.rates = await api("/api/muni-rates").catch(() => ({}));
+      await loadMuni();
     }
     renderPlan();
     plan.dash = await loadPlanDash();
     renderPlanResults();
   } catch (e) { toast(e.message); }
   plan.loading = false;
+}
+/* Steuerfüsse: gespeicherte Tabellen + Herkunft; beim Kanton nachfragen, wenn nichts da oder älter als ein Tag */
+function setMuni(st) { plan.muni = st || {}; plan.rates = plan.muni.rates || {}; }
+async function loadMuni() {
+  setMuni(await api("/api/muni-rates").catch(() => ({})));
+  const c = plan.P.canton, m = ((plan.muni.meta || {})[c]) || {};
+  if (plan.muni.auto && (plan.muni.sources || []).includes(c) && Date.now() / 1000 - (m.checked || 0) > 86400)
+    setMuni(await api("/api/muni-rates/refresh", { method: "POST", body: { canton: c } }).catch(() => plan.muni));
 }
 /* Vermögen aus allen Portfolios und 3a-Einzahlungen im laufenden Jahr */
 async function loadPlanDash() {
@@ -473,13 +481,23 @@ function muniFields(c) {
   }
   if (!vs) h += field("muni", L("Gemeindesteuerfuss (%)", "Municipal tax rate (%)"), { hint: L(`Stadt Zürich: ${c.muni} %`, `City of Zurich: ${c.muni} %`) })
     + field("church", L("Kirchensteuerfuss (%)", "Church tax rate (%)"), { hint: L("0 = keine Kirchensteuer", "0 = no church tax") });
-  const all = (plan.rates || {})[P.canton] || {};
+  const all = (plan.rates || {})[P.canton] || {}, cm = ((plan.muni || {}).meta || {})[P.canton] || {}, ym = cm.years || {};
+  const auto = (plan.muni.sources || []).includes(P.canton), fmtD = (ts) => new Date(ts * 1000).toLocaleDateString(LOCALE);
+  const newest = Object.keys(all).sort().pop();
   h += `<div class="plan-upload">
-    <label class="btn ghost small" for="plMuniFile">${L("Steuerfüsse-CSV hochladen …", "Upload tax rate CSV …")}</label>
+    ${auto ? `<span class="hint">${L("Quelle: Statistisches Amt des Kantons Zürich (offene Daten)", "Source: Statistical Office of the Canton of Zurich (open data)")}${cm.checked ? L(` · zuletzt geprüft ${fmtD(cm.checked)}`, ` · last checked ${fmtD(cm.checked)}`) : ""}</span>
+      <button type="button" class="btn ghost small" id="plMuniRefresh">${L("Jetzt prüfen", "Check now")}</button>
+      <label class="check"><input type="checkbox" id="plMuniAuto" ${plan.muni.auto ? "checked" : ""}> <span>${L("automatisch aktualisieren", "update automatically")}</span></label>` : ""}
+    ${cm.error ? `<p class="err">${L("Letzter Abruf fehlgeschlagen: ", "Last fetch failed: ")}${esc(cm.error)}</p>` : ""}
+    <div class="plan-years">${Object.keys(all).sort().map((y) => {
+      const i = ym[y] || {}, tag = i.src === "auto" ? L(`automatisch${i.refresh ? `, Stand ${esc(i.refresh)}` : ""}${i.flag ? `, ${esc(i.flag)}` : ""}`, `automatic${i.refresh ? `, as of ${esc(i.refresh)}` : ""}${i.flag ? `, ${esc(i.flag)}` : ""}`) : L("hochgeladen", "uploaded");
+      return `<span class="active-chip" title="${tag}">${y} <small>${tag}</small><button type="button" class="plan-x" data-delyear="${y}" title="${L("Tabelle löschen", "Delete table")}" aria-label="${L("Tabelle löschen", "Delete table")} ${y}">✕</button></span>`;
+    }).join("")}</div>
+    ${newest && Number(newest) < curYear() ? `<p class="hint">${L(`Die Steuerfüsse ${curYear()} sind noch nicht publiziert (meist im Frühling) – bis dahin gelten jene von ${newest}.`, `The ${curYear()} tax rates are not published yet (usually in spring) – until then the ${newest} rates apply.`)}</p>` : ""}
+    <label class="btn ghost small" for="plMuniFile">${L("CSV manuell hochladen …", "Upload CSV manually …")}</label>
     <input type="file" id="plMuniFile" accept=".csv,text/csv" hidden>
-    ${Object.keys(all).sort().map((y) => `<span class="active-chip">${y}<button type="button" class="plan-x" data-delyear="${y}" title="${L("Tabelle löschen", "Delete table")}" aria-label="${L("Tabelle löschen", "Delete table")} ${y}">✕</button></span>`).join("")}
-    <span class="hint">${L("CSV der Gemeindesteuerfüsse vom Kantonalen Steueramt (zh.ch/steuerfuesse). Das Jahr wird aus dem Dateinamen gelesen.",
-      "CSV of municipal tax rates from the cantonal tax office (zh.ch/steuerfuesse). The year is read from the file name.")}</span></div>`;
+    <span class="hint">${auto ? L("Hochgeladene Tabellen werden vom automatischen Abruf nicht überschrieben.", "Uploaded tables are not overwritten by the automatic fetch.")
+      : L("CSV der Gemeindesteuerfüsse des Kantons hochladen. Das Jahr wird aus dem Dateinamen gelesen.", "Upload the canton's municipal tax rate CSV. The year is read from the file name.")}</span></div>`;
   return h;
 }
 
@@ -527,7 +545,7 @@ async function uploadMuniCsv(file) {
   const rows = parseMuniCsv(text);
   const year = (file.name.match(/20\d\d/) || [String(new Date().getFullYear())])[0];
   await api("/api/muni-rates", { method: "POST", body: { canton: plan.P.canton, year, rates: rows } });
-  plan.rates = await api("/api/muni-rates");
+  setMuni(await api("/api/muni-rates"));
   plan.P.taxYear = year;
   if (!plan.P.gemeinde) {   // bisherigen Gemeindesteuerfuss einer Gemeinde zuordnen, wenn eindeutig
     const hit = Object.keys(rows).filter((n) => rows[n][0][0] === nv(plan.P.muni, -1));
@@ -634,6 +652,17 @@ function renderPlan() {
     const rs = $("#plYearReset");
     if (rs) rs.onclick = () => { delete plan.P.yearVals[curYear()]; savePlan(); renderPlan(); };
   }
+  const mr = $("#plMuniRefresh");
+  if (mr) mr.onclick = async () => {
+    mr.disabled = true;
+    try {
+      setMuni(await api("/api/muni-rates/refresh", { method: "POST", body: { canton: plan.P.canton, force: true } }));
+      const y = Object.keys(plan.rates[plan.P.canton] || {}).sort().pop();
+      renderPlan(); toast(L(`Steuerfüsse aktuell (neuestes Jahr: ${y || "–"})`, `Tax rates up to date (latest year: ${y || "–"})`));
+    } catch (ex) { toast(ex.message, 6000); setMuni(await api("/api/muni-rates").catch(() => plan.muni)); renderPlan(); }
+  };
+  const ma = $("#plMuniAuto");
+  if (ma) ma.onchange = async () => { try { setMuni(await api("/api/muni-rates/auto", { method: "POST", body: { enabled: ma.checked } })); } catch (ex) { toast(ex.message); } };
   $("#plMuniFile").onchange = async (e) => {
     const f = e.target.files[0]; e.target.value = "";
     if (f) try { await uploadMuniCsv(f); } catch (ex) { toast(ex.message, 6000); }
@@ -641,7 +670,7 @@ function renderPlan() {
   root.querySelectorAll("[data-delyear]").forEach((b) => (b.onclick = async () => {
     const y = b.dataset.delyear;
     if (!(await confirmDialog(L(`Steuerfüsse ${y} löschen?`, `Delete tax rates ${y}?`), L("Die hochgeladene Tabelle wird entfernt. Du kannst sie jederzeit neu hochladen.", "The uploaded table is removed. You can upload it again at any time."), L("Löschen", "Delete")))) return;
-    try { await api("/api/muni-rates", { method: "POST", body: { canton: plan.P.canton, year: y, delete: true } }); plan.rates = await api("/api/muni-rates"); renderPlan(); }
+    try { await api("/api/muni-rates", { method: "POST", body: { canton: plan.P.canton, year: y, delete: true } }); setMuni(await api("/api/muni-rates")); renderPlan(); }
     catch (ex) { toast(ex.message); }
   }));
   $("#plHideDone").onchange = (e) => { plan.P.hideDone = e.target.checked; renderTips(); savePlan(); };
