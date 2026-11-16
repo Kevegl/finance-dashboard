@@ -17,10 +17,10 @@ Das Startprogramm
 import os
 import sys
 
-if sys.version_info < (3, 9):
-    print("Das Finanz-Dashboard braucht Python 3.9 oder neuer – installiert ist "
+if sys.version_info < (3, 10):
+    print("Das Finanz-Dashboard braucht Python 3.10 oder neuer – installiert ist "
           f"{sys.version.split()[0]}. Download: https://www.python.org/downloads/")
-    print("The finance dashboard needs Python 3.9 or newer.")
+    print("The finance dashboard needs Python 3.10 or newer.")
     sys.exit(1)
 
 import json
@@ -63,6 +63,15 @@ import local_update as lu  # noqa: E402  (liegt neben dieser Datei)
 
 # mitgelieferte Version: entpackter Download bzw. der Ordner app/ im Paket der .exe/App
 BUNDLE = Path(os.environ.get("FD_BUNDLE_APP") or (Path(getattr(sys, "_MEIPASS", HERE)) / "app" if FROZEN else HERE))
+
+
+# Ausgabe umgeleitet (z.B. Windows ohne Konsole, Tests): immer UTF-8, damit «→» und Umlaute nicht abstürzen
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        if _stream is not None and not _stream.isatty():
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError, ValueError):
+        pass
 
 
 def say(de, en=None):
@@ -152,7 +161,7 @@ class Launcher:
         env = {k: v for k, v in os.environ.items()
                if k not in ("FD_CERT", "FD_KEY", "FD_REPO_DIR", "FD_LAUNCHER_DELEGATED", "FD_BUNDLE_APP")}
         env.update(FD_LOCAL="1", FD_HOST="127.0.0.1", FD_PORT=str(self.port), FD_DATA_DIR=str(self.data),
-                   FD_APP_VERSION=version, FD_BUNDLED_VERSION=self.bundled, PYTHONUNBUFFERED="1")
+                   FD_APP_VERSION=version, FD_BUNDLED_VERSION=self.bundled, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8:replace")
         if getattr(sys, "frozen", False):
             cmd = [sys.executable, "--serve", str(app_dir)]
         else:

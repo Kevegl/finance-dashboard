@@ -4,11 +4,11 @@
 # Zum Beenden: Einstellungen → «Dashboard beenden» oder dieses Fenster schliessen.
 cd "$(dirname "$0")" || exit 1
 PY="$(command -v python3 || true)"
-if [ -z "$PY" ] || ! "$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null; then
+if [ -z "$PY" ] || ! "$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
   echo
-  echo "  Python 3.9 oder neuer wurde nicht gefunden. Bitte von https://www.python.org/downloads/"
+  echo "  Python 3.10 oder neuer wurde nicht gefunden. Bitte von https://www.python.org/downloads/"
   echo "  installieren und danach start.command erneut öffnen."
-  echo "  Python 3.9 or newer was not found. Please install it from https://www.python.org/downloads/."
+  echo "  Python 3.10 or newer was not found. Please install it from https://www.python.org/downloads/."
   echo
   open "https://www.python.org/downloads/" 2>/dev/null
   read -r -p "Enter drücken zum Schliessen / press Enter to close … " _

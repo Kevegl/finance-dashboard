@@ -23,6 +23,13 @@ PORT = int(os.environ.get("SMOKE_PORT", "18799"))
 BASE = f"http://127.0.0.1:{PORT}"
 
 
+for _s in (sys.stdout, sys.stderr):   # Windows-Konsole in GitHub Actions: cp1252 -> UTF-8
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
+
 def main():
     cmd = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [sys.executable, "app/launcher.py"]
     data = tempfile.mkdtemp(prefix="fd-smoke-")

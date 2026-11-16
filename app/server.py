@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Finanz-Dashboard – schlanker Server ohne externe Abhängigkeiten (nur Python 3.9+ stdlib).
+"""Finanz-Dashboard – schlanker Server ohne externe Abhängigkeiten (nur Python 3.10+ stdlib).
 
 Umgebungsvariablen:
   FD_HOST        (Standard 0.0.0.0)

@@ -20,6 +20,13 @@ PORT = int(os.environ.get("SMOKE_PORT", "18098"))
 BASE = f"http://127.0.0.1:{PORT}"
 
 
+for _s in (sys.stdout, sys.stderr):   # Windows-Konsole in GitHub Actions: cp1252 -> UTF-8
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
+
 def main():
     data = tempfile.mkdtemp(prefix="fd-server-")
     env = {k: v for k, v in os.environ.items() if k not in ("FD_LOCAL", "FD_DOCKER", "FD_REPO_DIR")}

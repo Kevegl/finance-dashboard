@@ -47,6 +47,13 @@ def version():
     return (APP / "VERSION").read_text(encoding="utf-8").strip()
 
 
+for _s in (sys.stdout, sys.stderr):   # Windows-Konsole in GitHub Actions: cp1252 -> UTF-8
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
+
 def main():
     system = {"Windows": "windows", "Darwin": "macos"}.get(platform.system(), "linux")
     arch = platform.machine().lower().replace("x86_64", "x64").replace("amd64", "x64").replace("aarch64", "arm64")

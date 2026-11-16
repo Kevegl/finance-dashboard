@@ -46,7 +46,7 @@ Das Programm hat kein eigenes Fenster. **Beenden** kannst du es im Dashboard unt
 
 ## Python-Variante (Windows, Mac, Linux)
 
-1. **Python 3.9 oder neuer** installieren, falls noch nicht vorhanden:
+1. **Python 3.10 oder neuer** installieren, falls noch nicht vorhanden:
    [python.org/downloads](https://www.python.org/downloads/). Unter Windows dabei *Add python.exe to PATH* anhaken.
    Unter Linux ist Python meist schon installiert.
 2. Auf GitHub unter [**Releases**](https://github.com/Kevegl/finance-dashboard/releases/latest) bei der neuesten
