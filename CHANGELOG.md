@@ -3,6 +3,18 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.0.1
+
+### Behoben
+- Windows: «GitHub nicht erreichbar: CERTIFICATE_VERIFY_FAILED» bei der Update-Prüfung. Fehlt im
+  Windows-Zertifikatsspeicher ein Stammzertifikat, lässt das Dashboard Windows es jetzt automatisch ergänzen und
+  versucht es erneut. Das gilt auch für Kurse, News und Steuerfüsse.
+
+**Update:** *Einstellungen → Updates → Jetzt aktualisieren*. Erscheint unter Windows noch die Zertifikatsmeldung,
+öffne einmal https://api.github.com in Edge und klicke danach auf *Nach Updates suchen*.
+
+*English:* Fixes the certificate error on Windows when checking for updates.
+
 ## 1.0.0
 
 Erste öffentliche Version des selbst gehosteten Portfolio-Dashboards für Relai, Interactive Brokers,

@@ -44,6 +44,11 @@ jobs:
       - name: start.bat (Windows)
         if: runner.os == 'Windows'
         run: python tests/smoke_local.py -- cmd /c start.bat
+      - name: GitHub-Releases abrufen (echte Zertifikatsprüfung, Windows-Ergänzung über PowerShell)
+        if: runner.os == 'Windows'
+        working-directory: app
+        run: |
+          python -c "import local_update as lu; lu.warm_windows_certs('https://api.github.com/'); r = lu.fetch_releases(); print('Releases:', [x['tag'] for x in r]); assert r"
       - name: start.command (macOS)
         if: runner.os == 'macOS'
         run: python tests/smoke_local.py -- bash start.command

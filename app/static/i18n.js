@@ -235,6 +235,8 @@ const EN_ERR_RX = [
   [/^Zeile (\d+): Menge fehlt$/, "Row $1: quantity missing"],
   [/^Fehler (\d+)$/, "Error $1"],
   [/^GitHub antwortet mit Fehler (\d+)\.$/, "GitHub responded with error $1."],
+  [/^GitHub nicht erreichbar: Das Zertifikat konnte nicht geprüft werden \(Windows-Zertifikatsspeicher unvollständig\)\. Bitte Windows Update ausführen oder die Seite einmal in Edge öffnen\.$/, "GitHub not reachable: the certificate could not be verified (Windows certificate store incomplete). Please run Windows Update or open the page once in Edge."],
+  [/^Download fehlgeschlagen: Das Zertifikat konnte nicht geprüft werden \(Windows-Zertifikatsspeicher unvollständig\)\. Bitte Windows Update ausführen oder die Seite einmal in Edge öffnen\.$/, "Download failed: the certificate could not be verified (Windows certificate store incomplete). Please run Windows Update or open the page once in Edge."],
   [/^GitHub nicht erreichbar: (.*)$/, "GitHub not reachable: $1"],
   [/^Download fehlgeschlagen \(Fehler (\d+)\)\.$/, "Download failed (error $1)."],
   [/^Download fehlgeschlagen: (.*)$/, "Download failed: $1"],

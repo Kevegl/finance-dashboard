@@ -230,7 +230,7 @@ def refresh_muni_rates(canton="ZH", force=False):
         err = None
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "text/csv"})
-            with urllib.request.urlopen(req, timeout=20) as r:
+            with local_update.urlopen(req, timeout=20) as r:
                 text = r.read(2_000_000).decode("utf-8-sig", "replace")
             data, info = parse_zh_muni_csv(text)
             for year, rows in data.items():
@@ -507,7 +507,7 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 def http_json(url, timeout=15):
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with local_update.urlopen(req, timeout=timeout) as r:
         return json.load(r)
 
 
@@ -904,7 +904,7 @@ def fetch_news(query, lang, force=False):
            + "&" + NEWS_REGION[lang])
     try:
         req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/rss+xml, application/xml"})
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with local_update.urlopen(req, timeout=10) as r:
             items = parse_rss(r.read(2_000_000), limit=20)
     except Exception as e:  # noqa: BLE001
         print(f"News für '{query}' ({lang}) nicht abrufbar: {e}")
