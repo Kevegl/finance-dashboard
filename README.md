@@ -280,6 +280,8 @@ Startskripte und des Docker-Images.
 1. Die Versionsnummer in `app/VERSION` erhöhen, z.B. auf `1.1.0`, committen und pushen.
 2. Auf GitHub unter *Releases → Draft a new release* den Tag `v1.1.0` anlegen (muss zu `app/VERSION` passen),
    Änderungen kurz beschreiben und auf *Publish release* klicken.
+   Alternativ im Terminal: `git tag -a v1.1.0 -m "Änderungen …" && git push origin v1.1.0`. Die Tag-Nachricht
+   wird zu den Release-Notizen, das Release legt der Workflow selbst an.
 3. Der Workflow `.github/workflows/release.yml` baut dann automatisch:
    - das Docker-Image `ghcr.io/kevegl/finance-dashboard:1.1.0` bzw. `:latest`,
    - die Windows-`.exe` und die Mac-App, testet beide und hängt sie ans Release.

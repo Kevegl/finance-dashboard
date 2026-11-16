@@ -16,8 +16,9 @@ Sprache im Projekt: Deutsch (Schweizer Schreibweise, „ss“ statt „ß“), U
   Fallback im Container: `cd /root/finance-dashboard && git pull && bash install.sh`.
 - Nach einem Push dem Benutzer kurz sagen, was sich ändert und dass er es über *Updates* installieren kann.
 - Andere Nutzer (Programm/.exe, Python-Variante mit `start.*`, Docker, neue Proxmox-Installationen) erhalten nur
-  veröffentlichte Releases: Tag `vX.Y.Z` muss zu `app/VERSION` passen. Releases veröffentlicht der Benutzer selbst
-  auf GitHub; `.github/workflows/release.yml` baut dann Docker-Image, .exe und Mac-App.
+  veröffentlichte Releases: Tag `vX.Y.Z` muss zu `app/VERSION` passen. Releases nur auf ausdrücklichen Wunsch des
+  Benutzers: annotierter Tag `vX.Y.Z` (Nachricht = Release-Notizen) pushen oder Release auf GitHub veröffentlichen;
+  `.github/workflows/release.yml` legt das Release an und baut Docker-Image, .exe und Mac-App.
 
 ## Datenschutz – das Repo soll später öffentlich werden
 - Niemals echte Finanzdaten committen: keine eigenen CSV/PDF-Exporte, Datenbank, Sicherungs-JSONs, Kontonummern,

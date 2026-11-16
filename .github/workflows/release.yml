@@ -1,4 +1,6 @@
-# Wird ein Release auf GitHub veröffentlicht (Tag v1.2.3, muss zu app/VERSION passen), entstehen automatisch:
+# Auslöser: ein auf GitHub veröffentlichtes Release ODER ein gepushter Tag v1.2.3 (annotiert; die Tag-Nachricht
+# wird zu den Release-Notizen, das Release legt dieser Workflow dann selbst an). Der Tag muss zu app/VERSION passen.
+# Es entstehen automatisch:
 #   - Docker-Image ghcr.io/<owner>/finance-dashboard:<version> und :latest (amd64 + arm64)
 #   - FinanzDashboard-<version>-windows-x64.zip (.exe) und -macos-arm64.zip (.app) als Release-Dateien
 # Von Hand gestartet (workflow_dispatch) wird nur gebaut und getestet, nichts veröffentlicht.
@@ -7,7 +9,13 @@ name: Release
 on:
   release:
     types: [published]
+  push:
+    tags: ["v*"]
   workflow_dispatch:
+
+# Release in der GitHub-Oberfläche + neuer Tag lösen beide Ereignisse aus -> nacheinander statt gleichzeitig
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref_name }}
 
 permissions:
   contents: write    # Dateien ans Release hängen
@@ -18,16 +26,36 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      publish: ${{ steps.v.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
       - id: v
         name: Version prüfen
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
         run: |
           VERSION=$(tr -d '[:space:]' < app/VERSION)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if [ "${{ github.event_name }}" = "release" ] && [ "${{ github.event.release.tag_name }}" != "v$VERSION" ]; then
-            echo "::error::Tag ${{ github.event.release.tag_name }} passt nicht zu app/VERSION ($VERSION) – erwartet v$VERSION"
+          if [ "$EVENT" = "workflow_dispatch" ]; then echo "publish=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::Tag $TAG passt nicht zu app/VERSION ($VERSION) – erwartet v$VERSION"
             exit 1
+          fi
+      - name: Release anlegen (bei gepushtem Tag)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
+        run: |
+          git fetch --force --quiet origin "refs/tags/$TAG:refs/tags/$TAG"   # Tag-Nachricht für die Notizen
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG existiert bereits."
+          else
+            gh release create "$TAG" --verify-tag --notes-from-tag --title "Finanz-Dashboard ${TAG#v}"
           fi
 
   docker:
@@ -38,7 +66,7 @@ jobs:
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
-        if: github.event_name == 'release'
+        if: needs.verify.outputs.publish == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -54,7 +82,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name == 'release' }}
+          push: ${{ needs.verify.outputs.publish == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
@@ -82,12 +110,12 @@ jobs:
       - name: Kurztest der gebauten Version
         run: python tests/smoke_local.py -- "${{ steps.build.outputs.exe }}"
       - name: An das Release anhängen
-        if: github.event_name == 'release'
+        if: needs.verify.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" "${{ steps.build.outputs.zip }}" --clobber
+        run: gh release upload "${{ needs.verify.outputs.tag }}" "${{ steps.build.outputs.zip }}" --clobber
       - name: Als Artefakt ablegen (Testlauf)
-        if: github.event_name != 'release'
+        if: needs.verify.outputs.publish != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: FinanzDashboard-${{ runner.os }}
