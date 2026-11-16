@@ -13,10 +13,36 @@ TLS_DIR=/etc/finance-dashboard/tls
 SRC="$(cd "$(dirname "$0")" && pwd)"
 
 [ "$(id -u)" -eq 0 ] || { echo "Bitte als root ausführen."; exit 1; }
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_SUSPEND=1   # während install.sh keine automatischen Neustarts – der Dienst wird unten selbst neu gestartet
 
 echo "→ Pakete installieren"
 apt-get update -qq
 apt-get install -y -qq python3 ca-certificates tzdata openssl poppler-utils git >/dev/null
+
+# --- Automatische Sicherheitsupdates für Debian (Python, OpenSSL, …) – einmalig einrichten.
+#     Abschalten: AUTO_UPDATES=0 bash install.sh vor der ersten Einrichtung, oder später
+#     /etc/apt/apt.conf.d/20auto-upgrades auf "0" setzen (wird danach nicht mehr überschrieben).
+AUTO_MARK=/etc/finance-dashboard/.auto-updates
+if [ "${AUTO_UPDATES:-1}" = 1 ] && [ ! -e "$AUTO_MARK" ]; then
+  echo "→ Automatische Sicherheitsupdates einrichten (unattended-upgrades)"
+  [ -e /etc/apt/apt.conf.d/20auto-upgrades ] || cat > /etc/apt/apt.conf.d/20auto-upgrades <<'APT'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+APT
+  # Dienste nach Bibliotheks-Updates (z.B. OpenSSL, Python) automatisch neu starten
+  mkdir -p /etc/needrestart/conf.d
+  [ -e /etc/needrestart/conf.d/finance-dashboard.conf ] || cat > /etc/needrestart/conf.d/finance-dashboard.conf <<'NR'
+# Finanz-Dashboard: Dienste nach Bibliotheks-Updates automatisch neu starten (ohne Rückfrage),
+# den Update-Dienst des Dashboards aber nie (er installiert selbst Pakete und darf nicht abbrechen).
+$nrconf{restart} = 'a';
+$nrconf{kernelhints} = 0;
+$nrconf{override_rc}{qr(^finance-dashboard-update)} = 0;
+NR
+  apt-get install -y -qq unattended-upgrades needrestart >/dev/null
+  mkdir -p /etc/finance-dashboard && date -Iseconds > "$AUTO_MARK"
+fi
 
 echo "→ Benutzer und Verzeichnisse anlegen"
 id finance >/dev/null 2>&1 || useradd --system --home "$DEST" --shell /usr/sbin/nologin finance
@@ -132,9 +158,59 @@ systemctl enable --now finance-dashboard-cert.timer >/dev/null 2>&1
 if [ "$UPDATER" = 1 ]; then
   systemctl enable --now finance-dashboard-update.path finance-dashboard-update-check.timer >/dev/null 2>&1
 fi
+
+# Antwortet das Dashboard? (Dienst aktiv und /api/health ok; wartet bis zu 20 s)
+dashboard_ok() {
+  local i port
+  port=$(grep -E '^FD_PORT=' "$ENV" | cut -d= -f2)
+  for i in $(seq 1 20); do
+    sleep 1
+    systemctl is-active --quiet finance-dashboard || continue
+    python3 - "$port" <<'PY' && return 0
+import json, ssl, sys, urllib.request
+ctx = ssl.create_default_context(); ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
+for scheme in ("https", "http"):
+    try:
+        with urllib.request.urlopen(f"{scheme}://127.0.0.1:{sys.argv[1]}/api/health", timeout=3, context=ctx) as r:
+            sys.exit(0 if json.load(r).get("ok") else 1)
+    except Exception:
+        pass
+sys.exit(1)
+PY
+  done
+  return 1
+}
+
+COMPAT=/etc/systemd/system/finance-dashboard.service.d/container-compat.conf
 systemctl restart finance-dashboard
-sleep 1
-systemctl is-active --quiet finance-dashboard || { echo "✗ Dienst läuft nicht:"; journalctl -u finance-dashboard -n 20 --no-pager; exit 1; }
+if ! dashboard_ok && [ ! -e "$COMPAT" ]; then
+  # Manche Container (z.B. ältere oder privilegierte LXC) unterstützen nicht alle Härtungs-Optionen.
+  # Dann nur diese lockern – die Grundhärtung (eigener Benutzer, Dateisystem nur lesbar) bleibt.
+  echo "⚠ Dienst startet mit der erweiterten Härtung nicht – lockere container-abhängige Optionen:"
+  journalctl -u finance-dashboard -n 8 --no-pager || true
+  mkdir -p "$(dirname "$COMPAT")"
+  cat > "$COMPAT" <<'UNIT'
+# Von install.sh angelegt, weil der Dienst mit der vollen Härtung in diesem Container nicht startete.
+# Löschen und install.sh erneut ausführen, um die volle Härtung nochmals zu versuchen.
+[Service]
+PrivateDevices=false
+ProtectKernelTunables=false
+ProtectKernelModules=false
+ProtectKernelLogs=false
+ProtectControlGroups=false
+ProtectHostname=false
+ProtectClock=false
+ProtectProc=default
+ProcSubset=all
+RestrictNamespaces=false
+MemoryDenyWriteExecute=false
+SystemCallFilter=
+UNIT
+  systemctl daemon-reload
+  systemctl restart finance-dashboard
+fi
+dashboard_ok || { echo "✗ Dienst läuft nicht:"; journalctl -u finance-dashboard -n 20 --no-pager; exit 1; }
+[ -e "$COMPAT" ] && echo "  Hinweis: eingeschränkte Härtung aktiv ($COMPAT)"
 
 # Gleich einmal auf Updates prüfen, damit die Einstellungen einen Stand anzeigen (nicht während eines Updates)
 if [ "$UPDATER" = 1 ] && [ -z "${FD_UPDATER_RUNNING:-}" ]; then

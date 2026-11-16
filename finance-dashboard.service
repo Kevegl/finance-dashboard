@@ -13,12 +13,38 @@ ExecStart=/usr/bin/python3 /opt/finance-dashboard/app/server.py
 Restart=on-failure
 RestartSec=3
 
-# Härtung
+# Härtung: nur Lesezugriff aufs System, Schreiben nur im Datenordner
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 ReadWritePaths=/var/lib/finance-dashboard
+UMask=0077
+# keine Sonderrechte, keine Geräte, kein Zugriff auf Kernel-Einstellungen, Uhr oder fremde Prozesse
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectClock=true
+ProtectProc=invisible
+ProcSubset=pid
+# nur IP-Netzwerk (Browser, Kurse/News/Updates) und lokale Sockets
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RemoveIPC=true
+# nur die Systemaufrufe, die ein normaler Dienst braucht
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
 
 [Install]
 WantedBy=multi-user.target
