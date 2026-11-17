@@ -41,6 +41,7 @@ const EN = {
   "Benutzername": "Username",
   "Passwort": "Password",
   "Passwort wiederholen": "Repeat password",
+  "Einrichtungscode": "Setup code",
   // Dashboard
   "Neueste Nachrichten zu deinen Positionen": "Latest news on your holdings",
   "Gesamtwert": "Total value",
@@ -184,6 +185,7 @@ const EN = {
 };
 
 const EN_HTML = {
+  authSetupHint: "<code>install.sh</code> shows the setup code at the end. It is also in the dashboard's log (<code>journalctl -u finance-dashboard</code> or <code>docker logs</code>) and in the file <code>setup-code.txt</code> in the data folder.",
   recNoCode: "No code any more? On a server or in Docker, run <code>python3 server.py --reset-password</code> (on the server). When running locally, choose “Reset password” in the status window.",
   updUnavailable: "Updates via the dashboard are only available if it was installed with <code>git clone</code>. See the README for instructions.",
   updDocker: "In Docker the dashboard is updated with a new image: <code>docker compose pull &amp;&amp; docker compose up -d</code> (or automatically with Watchtower). Your data in the volume is kept.",
@@ -247,6 +249,7 @@ const EN_ERR = {
   "Ungültiger Typ": "Invalid type",
   "Ungültiges Datum": "Invalid date",
   "Ungültige Zahl": "Invalid number",
+  "Der Einrichtungscode ist falsch.": "The setup code is wrong.",
   "Zu viele gleichzeitige Anmeldeversuche – bitte kurz warten.": "Too many simultaneous sign-in attempts – please wait a moment.",
   "Das Passwort muss mindestens 8 Zeichen lang sein.": "The password must be at least 8 characters long.",
 };

@@ -39,8 +39,9 @@ from validate import import_problem, normalize_tx
 from store import (db_tx, ensure_asset, get_lang, get_setting, init_db, list_portfolios, make_backup, restore_backup,
     set_setting, with_hashes)
 from muni import MUNI_SOURCES, muni_state, refresh_muni_rates, save_muni_rates
-from auth import (ServerBusy, TOTP_LOCK, _th, auth_configured, auth_log_summary, check_new_password, create_session,
-    hash_pw, log_auth, recovery_check, recovery_new, revoke_sessions, session_user, totp_active, totp_match,
+from auth import (SETUP_CODE_FILE, ServerBusy, TOTP_LOCK, _th, auth_configured, auth_log_summary, check_new_password,
+    create_session, hash_pw, log_auth, recovery_check, recovery_new, revoke_sessions, session_user, setup_code,
+    setup_code_clear, setup_code_ok, setup_code_pending, setup_code_required, totp_active, totp_match,
     totp_new_secret, totp_off, totp_uri, totp_verify_login, verify_pw)
 from prices import refresh_prices
 from news import portfolio_news
@@ -58,6 +59,7 @@ def local_starter():
 FAILED = {}            # IP -> [Zeitpunkte fehlgeschlagener Anmeldungen]
 FAILED_LOCK = threading.Lock()
 BLOCK_LOGGED = {}      # IP -> Zeitpunkt des letzten Protokolleintrags «login_blocked»
+SETUP_LOCK = threading.Lock()   # Ersteinrichtung: nur eine gleichzeitig
 MAX_FAILS, FAIL_WINDOW = 5, 900   # 5 Fehlversuche in 15 Min. -> 15 Min. gesperrt
 
 
@@ -215,7 +217,7 @@ class Handler(BaseHTTPRequestHandler):
         if not path.startswith("/api/") or path in self.PUBLIC:
             return True
         if not auth_configured():
-            self._send(401, {"error": "setup_required"})
+            self._send(401, {"error": "setup_required", "setup_code": setup_code_pending()})
             return False
         self.user = session_user(self._token())
         if not self.user:
@@ -226,16 +228,26 @@ class Handler(BaseHTTPRequestHandler):
     def _auth_api(self, path, body):
         """Öffentliche Endpunkte für Ersteinrichtung und Anmeldung."""
         if path == "/api/setup":
-            if auth_configured():
-                return self._send(409, {"error": "Das Dashboard ist bereits eingerichtet."})
-            user = (body.get("username") or "").strip()[:40] or "admin"
-            check_new_password(body.get("password"))
-            set_setting("auth_user", user)
-            set_setting("auth_hash", hash_pw(body["password"]))
-            code = recovery_new()
-            if body.get("lang") in LANGS:
-                set_setting("lang", body["lang"])
-            token = create_session(user)
+            with SETUP_LOCK:          # zwei gleichzeitige Einrichtungen: nur die erste gewinnt
+                if auth_configured():
+                    return self._send(409, {"error": "Das Dashboard ist bereits eingerichtet."})
+                user = str(body.get("username") or "").strip()[:40] or "admin"
+                check_new_password(body.get("password"))
+                stamp = None
+                if setup_code_required():
+                    stamp = self._reserve_attempt()
+                    if stamp is None:
+                        return self._blocked_reply()
+                    if not setup_code_ok(body.get("setup_code")):
+                        return self._fail(403, "Der Einrichtungscode ist falsch.", "setup_fail", counted=True)
+                set_setting("auth_user", user)
+                set_setting("auth_hash", hash_pw(body["password"]))
+                self._release_attempt(stamp)
+                setup_code_clear()
+                code = recovery_new()
+                if body.get("lang") in LANGS:
+                    set_setting("lang", body["lang"])
+                token = create_session(user)
             self._log("setup")
             return self._send(200, {"ok": True, "user": user, "recovery_code": code},
                               extra={"Set-Cookie": self._cookie(token, SESSION_DAYS * 86400)})
@@ -412,7 +424,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _get_auth_status(self, path):
         user = session_user(self._token()) if auth_configured() else None
-        return self._send(200, {"setup_required": not auth_configured(),
+        return self._send(200, {"setup_required": not auth_configured(), "setup_code": setup_code_pending(),
                                 "authenticated": bool(user), "user": user, "lang": get_lang(),
                                 "news": get_setting("news", "1") == "1"})
 
@@ -773,8 +785,12 @@ def main():
         set_setting("auth_user", None)
         totp_off()
         revoke_sessions()
+        setup_code_clear()        # beim nächsten Start gibt es einen neuen Einrichtungscode
         log_auth("reset_cli", "lokal", "")
         print("Anmeldung zurückgesetzt. Beim nächsten Aufruf kann ein neues Passwort festgelegt werden.")
+        if not LOCAL:
+            print("Dafür braucht es den Einrichtungscode: Er erscheint im Protokoll des Dashboards und in "
+                  f"{SETUP_CODE_FILE}, sobald das Dashboard läuft.")
         return
     threading.Thread(target=background_refresher, daemon=True).start()
     if LOCAL or DOCKER:
@@ -793,6 +809,8 @@ def main():
         scheme = "https"
     if not auth_configured():
         print("Ersteinrichtung: Dashboard im Browser öffnen und Benutzer + Passwort festlegen.")
+        if setup_code_required():
+            setup_code(announce=True)   # zeigt den Einrichtungscode im Protokoll an (legt ihn bei Bedarf an)
     ver = f"Version {APP_VERSION}, " if APP_VERSION else ""
     print(f"Finanz-Dashboard läuft auf {scheme}://{host}:{port}  ({ver}Basiswährung {config.BASE}, Daten in {DATA_DIR})")
     try:

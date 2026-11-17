@@ -117,7 +117,16 @@ def main():
         else:
             raise SystemExit("FEHLER: Server startet nicht")
         assert h == {"ok": True, "app": "finance-dashboard", "local": False}, h
-        setup = call("/api/setup", {"username": "test", "password": "testtest123"})
+        # Ersteinrichtung nur mit Einrichtungscode (steht in setup-code.txt im Datenordner)
+        st = call("/api/auth/status")
+        assert st["setup_required"] and st["setup_code"], st
+        code_file = Path(env["FD_DATA_DIR"], "setup-code.txt")
+        setup_code = code_file.read_text(encoding="ascii").strip()
+        assert re.fullmatch(r"[A-Z2-9]{4}-[A-Z2-9]{4}", setup_code), setup_code
+        # (falsche Codes prüft tests/calc_unit.py – hier würden sie die Zählung der Fehlversuche unten verschieben)
+        setup = call("/api/setup", {"username": "test", "password": "testtest123", "setup_code": setup_code.lower()})
+        assert not code_file.exists(), "setup-code.txt muss nach der Einrichtung gelöscht sein"
+        call("/api/setup", {"username": "x", "password": "testtest123", "setup_code": setup_code}, expect=409)
         rc = setup["recovery_code"]
         assert re.fullmatch(r"([A-Z2-9]{5}-){4}[A-Z2-9]{5}", rc) and not set("01OIL") & set(rc), rc
         assert call("/api/settings")["local"] is None

@@ -49,6 +49,8 @@
     <label class="field">Benutzername<input name="username" autocomplete="username" required></label>
     <label class="field">Passwort<input name="password" type="password" autocomplete="current-password" required></label>
     <label class="field" id="authRepeat" hidden>Passwort wiederholen<input name="password2" type="password" autocomplete="new-password"></label>
+    <label class="field" id="authSetupField" hidden>Einrichtungscode<input name="setupcode" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="XXXX-XXXX"></label>
+    <p class="hint" id="authSetupHint" hidden data-i18n-html="authSetupHint">Den Einrichtungscode zeigt <code>install.sh</code> am Ende an. Er steht auch im Protokoll des Dashboards (<code>journalctl -u finance-dashboard</code> bzw. <code>docker logs</code>) und in der Datei <code>setup-code.txt</code> im Datenordner.</p>
     <label class="field" id="authCodeField" hidden>Code aus der Authenticator-App<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456"></label>
     <p class="err" id="authErr" hidden></p>
     <button class="btn primary wide" id="authSubmit" type="submit">Anmelden</button>

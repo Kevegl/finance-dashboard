@@ -92,6 +92,7 @@ async function api(path, opts = {}) {
     body: opts.body ? JSON.stringify(opts.body) : undefined });
   const data = await r.json().catch(() => ({}));
   if (r.status === 401 && ["setup_required", "login_required"].includes(data.error)) {
+    if (data.error === "setup_required") authSetupCode = !!data.setup_code;
     showAuth(data.error === "setup_required" ? "setup" : "login");
     throw new Error(L("Bitte anmelden", "Please sign in"));
   }
@@ -814,7 +815,7 @@ $("#btnRefresh").onclick = async () => {
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => state.summary && renderChart(), 120); });
 
 /* ---------- Anmeldung ---------- */
-let authMode = "login", authNeedCode = false;
+let authMode = "login", authNeedCode = false, authSetupCode = false;
 function showAuth(mode) {
   authMode = mode;
   $("#topbar").hidden = true; $("#app").hidden = true; $("#authView").hidden = false;
@@ -829,13 +830,15 @@ function showAuth(mode) {
     ? L("Lege Benutzername und Passwort für dein Finanz-Dashboard fest. Mindestens 8 Zeichen.", "Choose a username and password for your finance dashboard. At least 8 characters.")
     : L("Melde dich an, um dein Portfolio zu sehen.", "Sign in to see your portfolio.");
   $("#authRepeat").hidden = !setup;
+  $("#authSetupField").hidden = $("#authSetupHint").hidden = !(setup && authSetupCode);
   const f = $("#authForm");
   f.elements.password.autocomplete = setup ? "new-password" : "current-password";
   if (setup && !f.elements.username.value) f.elements.username.value = "admin";
   $("#authSubmit").textContent = setup ? L("Zugang einrichten", "Set up login") : L("Anmelden", "Sign in");
   $("#authErr").hidden = true;
   $("#authCodeField").hidden = !authNeedCode; $("#authForgot").hidden = setup;
-  (authNeedCode ? f.elements.code : setup || !f.elements.username.value ? f.elements.username : f.elements.password).focus();
+  (authNeedCode ? f.elements.code : setup && authSetupCode ? f.elements.setupcode
+    : setup || !f.elements.username.value ? f.elements.username : f.elements.password).focus();
 }
 function showApp() {
   $("#authView").hidden = true; $("#topbar").hidden = false; $("#app").hidden = false;
@@ -852,13 +855,15 @@ $("#authForm").onsubmit = async (e) => {
   if (authMode === "setup") {
     if (password.length < 8) return fail(L("Das Passwort muss mindestens 8 Zeichen lang sein.", "The password must be at least 8 characters long."));
     if (password !== f.elements.password2.value) return fail(L("Die Passwörter stimmen nicht überein.", "The passwords do not match."));
+    if (authSetupCode && !f.elements.setupcode.value.trim()) return fail(L("Bitte den Einrichtungscode eingeben.", "Please enter the setup code."));
   }
   $("#authSubmit").disabled = true;
   try {
     const body = { username, password, lang: LANG };
     if (authMode !== "setup" && authNeedCode) body.code = f.elements.code.value.trim();
+    if (authMode === "setup" && authSetupCode) body.setup_code = f.elements.setupcode.value.trim();
     const r = await api(authMode === "setup" ? "/api/setup" : "/api/login", { method: "POST", body });
-    f.elements.password.value = ""; f.elements.password2.value = ""; f.elements.code.value = "";
+    f.elements.password.value = ""; f.elements.password2.value = ""; f.elements.code.value = ""; f.elements.setupcode.value = "";
     authNeedCode = false;
     if (r.recovery_code) await showRecoveryCode(r.recovery_code);
     showApp();
@@ -1023,6 +1028,7 @@ const authEvent = (e) => ({
   totp_fail: L("Fehlversuch (Code)", "Failed attempt (code)"), password_fail: L("Fehlversuch (Passwort in den Einstellungen)", "Failed attempt (password in settings)"), password_changed: L("Passwort geändert", "Password changed"),
   recovery_used: L("Passwort per Wiederherstellungscode zurückgesetzt", "Password reset with recovery code"),
   recovery_fail: L("Fehlversuch (Wiederherstellungscode)", "Failed attempt (recovery code)"),
+  setup_fail: L("Fehlversuch (Einrichtungscode)", "Failed attempt (setup code)"),
   recovery_new: L("Neuer Wiederherstellungscode", "New recovery code"), totp_on: L("Zwei-Faktor eingeschaltet", "Two-factor switched on"),
   totp_off: L("Zwei-Faktor ausgeschaltet", "Two-factor switched off"), reset_cli: L("Anmeldung per Befehl/Statusfenster zurückgesetzt", "Sign-in reset via command/status window"),
   logout_others: L("Andere Geräte abgemeldet", "Other devices signed out") }[e] || e);
@@ -1036,7 +1042,7 @@ async function loadAuthLog() {
     el.innerHTML = esc(last) + " · " + (n ? `<span class="warn"><b>${esc(L(`${n} Fehlversuch${n === 1 ? "" : "e"} in 30 Tagen`, `${n} failed attempt${n === 1 ? "" : "s"} in 30 days`))}</b></span>`
       : esc(L("keine Fehlversuche in 30 Tagen", "no failed attempts in 30 days")));
     $("#authLogList").innerHTML = r.entries.map((x) => {
-      const bad = ["login_fail", "totp_fail", "recovery_fail", "password_fail", "login_blocked"].includes(x.event);
+      const bad = ["login_fail", "totp_fail", "recovery_fail", "password_fail", "setup_fail", "login_blocked"].includes(x.event);
       return `<li class="${bad ? "bad" : ""}"><span class="t">${esc(fmt(x.ts))}</span><span class="ev">${esc(authEvent(x.event))}</span><span class="ip">${esc(x.ip)}</span></li>`;
     }).join("") || `<li>${esc(L("Noch keine Einträge.", "No entries yet."))}</li>`;
   } catch (e) { /* Protokoll ist optional */ }
@@ -1379,6 +1385,7 @@ $("#btnUpdRollback").onclick = async () => {
     const st = await fetch("/api/auth/status").then((r) => r.json());
     if (st.news === false) state.newsOn = false;
     if (st.lang && st.lang !== LANG) applyLanguage(st.lang);
+    authSetupCode = !!st.setup_code;
     if (st.setup_required) showAuth("setup");
     else if (!st.authenticated) showAuth("login");
     else showApp();

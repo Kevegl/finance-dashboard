@@ -54,7 +54,8 @@ def main():
                 break
             except OSError:
                 time.sleep(0.3)
-        call("/api/setup", {"username": USER, "password": PASSWORD, "lang": "de"})
+        code = (data / "setup-code.txt").read_text(encoding="ascii").strip()   # Einrichtungscode des Servers
+        call("/api/setup", {"username": USER, "password": PASSWORD, "lang": "de", "setup_code": code})
         call("/api/settings", {"title": "Mein Portfolio", "base": "CHF", "lang": "de", "news": False})
         pf = call("/api/portfolios")[0]
         call("/api/portfolios/rename", {"id": pf["id"], "name": "Depot"})

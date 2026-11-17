@@ -154,6 +154,8 @@ docker compose up -d
 
 Danach ist das Dashboard unter `http://<Adresse-des-Geräts>:8080` erreichbar. Auf einem Synology-NAS geht das
 auch über *Container Manager → Projekt → Erstellen* mit dieser Datei. Die Daten liegen im Volume `fd-data`.
+Für die Ersteinrichtung braucht es den **Einrichtungscode** aus dem Protokoll des Containers:
+`docker logs finance-dashboard` (Zeile «Einrichtungscode für die Ersteinrichtung: XXXX-XXXX»).
 
 **Updates:** Das Dashboard zeigt unter *Einstellungen → Updates* an, wenn es eine neue Version gibt. Installiert
 wird mit:
@@ -203,7 +205,7 @@ In `/etc/finance-dashboard.env`, danach `systemctl restart finance-dashboard`:
 | `FD_BASE_CCY` | Start-Basiswährung (danach in den Einstellungen änderbar) | `CHF` |
 | `FD_PRICE_TTL` | Kurs-Aktualisierung in Sekunden | `14400` |
 
-**Sicherheit:** `install.sh` aktiviert automatisch **HTTPS** (selbstsigniertes Zertifikat). Beim **ersten Aufruf** legst du im Browser Benutzername und Passwort fest (gespeichert als PBKDF2-Hash, Anmeldung per sicherem Sitzungs-Cookie, 30 Tage gültig). Passwort ändern, andere Geräte abmelden und CSV-Export findest du unter **Einstellungen** (Zahnrad oben rechts). Nach 5 falschen Passwörtern wird die IP 15 Minuten gesperrt.
+**Sicherheit:** `install.sh` aktiviert automatisch **HTTPS** (selbstsigniertes Zertifikat). Beim **ersten Aufruf** legst du im Browser Benutzername und Passwort fest; dafür braucht es den **Einrichtungscode**, den `install.sh` am Ende anzeigt (auch in `/var/lib/finance-dashboard/setup-code.txt` und `journalctl -u finance-dashboard`) (gespeichert als PBKDF2-Hash, Anmeldung per sicherem Sitzungs-Cookie, 30 Tage gültig). Passwort ändern, andere Geräte abmelden und CSV-Export findest du unter **Einstellungen** (Zahnrad oben rechts). Nach 5 falschen Passwörtern wird die IP 15 Minuten gesperrt.
 Passwort vergessen: auf der Anmeldeseite mit dem Wiederherstellungscode. Ohne Code im Container
 `cd /opt/finance-dashboard/app && FD_DATA_DIR=/var/lib/finance-dashboard python3 server.py --reset-password`, danach
 erscheint wieder die Ersteinrichtung. Weitere Schutzmassnahmen stehen unter [Sicherheit](#sicherheit).
@@ -391,7 +393,13 @@ Release-Workflow auch ohne Veröffentlichung testen. Die gebauten Dateien liegen
 
 **Anmeldung** (alle Varianten)
 - Benutzername und Passwort legst du beim ersten Aufruf fest. Das Passwort wird nur als PBKDF2-Hash gespeichert.
-  Nach 5 Fehlversuchen ist die Anmeldung von dieser Adresse aus 15 Minuten gesperrt.
+  Nach 5 Fehlversuchen ist die Anmeldung von dieser Adresse aus 15 Minuten gesperrt, auch bei vielen
+  gleichzeitigen Anfragen.
+- **Einrichtungscode** (Server und Docker): Solange noch kein Passwort festgelegt ist, verlangt die Ersteinrichtung
+  einen einmaligen Code. So kann niemand im Netzwerk eine frische Installation vor dir übernehmen. Der Code steht in
+  der Ausgabe von `install.sh`, im Protokoll (`journalctl -u finance-dashboard` bzw. `docker logs`) und in
+  `setup-code.txt` im Datenordner. Nach der Einrichtung wird er gelöscht; nach `--reset-password` gibt es einen neuen.
+  Im lokalen Betrieb (Programm/`start.*`, nur auf diesem Computer erreichbar) braucht es keinen Code.
 - **Wiederherstellungscode:** Nach der Einrichtung zeigt das Dashboard einmalig einen Code wie
   `K7Q2M-…` an. Bewahre ihn getrennt vom Passwort auf, z.B. im Passwortmanager oder ausgedruckt. Damit setzt du auf
   der Anmeldeseite unter *Passwort vergessen?* ein neues Passwort, ganz ohne Befehle. Danach gibt es sofort einen

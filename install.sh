@@ -224,5 +224,10 @@ echo
 echo "  Der Browser warnt beim ersten Aufruf vor dem selbstsignierten Zertifikat –"
 echo "  einmal 'Erweitert → Weiter zu …' wählen (oder das Zertifikat als vertrauenswürdig importieren)."
 echo "  Beim ersten Aufruf legst du Benutzername und Passwort fest – am besten gleich jetzt."
+DATA_NOW=$(grep -E '^FD_DATA_DIR=' "$ENV" | cut -d= -f2)
+if [ -f "${DATA_NOW:-/var/lib/finance-dashboard}/setup-code.txt" ]; then
+  echo "  Einrichtungscode dafür: $(cat "${DATA_NOW:-/var/lib/finance-dashboard}/setup-code.txt")"
+  echo "  (steht auch in ${DATA_NOW:-/var/lib/finance-dashboard}/setup-code.txt und in journalctl -u finance-dashboard)"
+fi
 echo "  Passwort vergessen?  cd $DEST/app && FD_DATA_DIR=/var/lib/finance-dashboard python3 server.py --reset-password"
 echo "  Einstellungen: $ENV   Daten: /var/lib/finance-dashboard/finance.db"

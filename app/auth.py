@@ -2,6 +2,7 @@
 import base64
 import hashlib
 import hmac
+import os
 import re
 import secrets
 import sqlite3
@@ -10,7 +11,7 @@ import threading
 import time
 import urllib.parse
 
-from config import MIN_PW, SESSION_DAYS
+from config import DATA_DIR, LOCAL, MIN_PW, SESSION_DAYS
 from store import db_tx, get_setting, set_setting
 
 
@@ -89,7 +90,7 @@ def check_new_password(pw):
 
 # --- Anmeldeprotokoll
 AUTH_LOG_KEEP = 500
-FAIL_EVENTS = ("login_fail", "totp_fail", "recovery_fail", "password_fail")
+FAIL_EVENTS = ("login_fail", "totp_fail", "recovery_fail", "password_fail", "setup_fail")
 
 
 def log_auth(event, ip, detail=""):
@@ -186,3 +187,63 @@ def recovery_check(code):
     stored = get_setting("auth_recovery_hash")
     norm = recovery_norm(code)
     return bool(stored) and len(norm) == 25 and verify_pw(norm, stored)
+
+
+# --- Einrichtungscode: schützt die Ersteinrichtung, solange noch kein Passwort festgelegt ist
+# Ohne ihn könnte jeder, der eine frische Installation im Netzwerk zuerst aufruft (oder eine fremde Webseite per
+# DNS-Rebinding), das Dashboard übernehmen. Der Code steht im Protokoll (journalctl/docker logs), in der Ausgabe von
+# install.sh und in setup-code.txt im Datenordner. Im lokalen Betrieb (nur 127.0.0.1) braucht es ihn nicht.
+SETUP_CODE_FILE = DATA_DIR / "setup-code.txt"
+SETUP_CODE_LOCK = threading.Lock()
+
+
+def setup_code_required():
+    return not LOCAL and not auth_configured()
+
+
+def setup_code_pending():
+    """Für die Anzeige: braucht die Einrichtung einen Code? Legt ihn dann an (z.B. nach --reset-password bei
+    laufendem Dashboard), damit er in setup-code.txt und im Protokoll steht, bevor jemand ihn eingeben muss."""
+    if not setup_code_required():
+        return False
+    setup_code()
+    return True
+
+
+def _announce(code):
+    print(f"Einrichtungscode für die Ersteinrichtung: {code[:4]}-{code[4:]}  (auch in {SETUP_CODE_FILE})", flush=True)
+
+
+def setup_code(announce=False):
+    """Liefert den aktuellen Einrichtungscode (8 Zeichen, ohne Bindestrich); legt ihn bei Bedarf an.
+    Ein neuer Code erscheint immer im Protokoll, ein bestehender nur mit announce=True (beim Start)."""
+    with SETUP_CODE_LOCK:
+        try:
+            code = recovery_norm(SETUP_CODE_FILE.read_text(encoding="ascii"))
+            if len(code) == 8:
+                if announce:
+                    _announce(code)
+                return code
+        except (OSError, UnicodeDecodeError):
+            pass                        # fehlt oder unlesbar (z.B. von root angelegt) -> neu anlegen
+        code = "".join(secrets.choice(RECOVERY_ALPHABET) for _ in range(8))
+        shown = f"{code[:4]}-{code[4:]}"
+        tmp = SETUP_CODE_FILE.with_name(f".setup-code-{secrets.token_hex(4)}")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="ascii") as f:
+            f.write(shown + "\n")
+        os.replace(tmp, SETUP_CODE_FILE)
+        _announce(code)
+        return code
+
+
+def setup_code_ok(entered):
+    return hmac.compare_digest(recovery_norm(entered).encode(), setup_code().encode())
+
+
+def setup_code_clear():
+    with SETUP_CODE_LOCK:
+        try:
+            SETUP_CODE_FILE.unlink()
+        except OSError:
+            pass

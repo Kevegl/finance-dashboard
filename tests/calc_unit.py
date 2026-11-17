@@ -163,6 +163,71 @@ class Summary(unittest.TestCase):
             prices.needed_tickers(con)                       # darf nicht mehr abbrechen
 
 
+class SetupCode(unittest.TestCase):
+    """Ersteinrichtung nur mit Einrichtungscode, und nur einmal – auch bei gleichzeitigen Anfragen."""
+
+    def setUp(self):
+        store.set_setting("auth_hash", None)
+        store.set_setting("auth_user", None)
+        auth.setup_code_clear()
+        server.FAILED.clear()
+        self.httpd = server.Server(("127.0.0.1", 0), server.Handler)
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+
+    def tearDown(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        server.FAILED.clear()
+
+    def call(self, path, body=None):
+        req = urllib.request.Request(self.url + path, data=json.dumps(body).encode() if body is not None else None,
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+        except OSError:
+            return None, None
+
+    def test_code_required_and_single_use(self):
+        st = self.call("/api/auth/status")[1]
+        self.assertTrue(st["setup_required"] and st["setup_code"])
+        code = auth.SETUP_CODE_FILE.read_text(encoding="ascii").strip()
+        self.assertRegex(code, r"^[A-Z2-9]{4}-[A-Z2-9]{4}$")
+        pw = {"username": "neu", "password": "langespasswort"}
+        self.assertEqual(self.call("/api/setup", pw)[0], 403)
+        self.assertEqual(self.call("/api/setup", dict(pw, setup_code="AAAA-AAAA"))[0], 403)
+        self.assertEqual(self.call("/api/setup", dict(pw, password="kurz", setup_code=code))[0], 400)
+        codes = []
+        threads = [threading.Thread(target=lambda: codes.append(self.call("/api/setup", dict(pw, setup_code=code.lower()))[0]))
+                   for _ in range(6)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(codes.count(200), 1, codes)
+        self.assertTrue(all(c in (200, 409, None) for c in codes), codes)
+        self.assertFalse(auth.SETUP_CODE_FILE.exists())
+        self.assertFalse(self.call("/api/auth/status")[1]["setup_code"])
+
+    def test_wrong_codes_lock_out(self):
+        auth.setup_code()
+        for _ in range(server.MAX_FAILS):
+            self.assertEqual(self.call("/api/setup", {"password": "langespasswort", "setup_code": "AAAA-AAAA"})[0], 403)
+        right = auth.SETUP_CODE_FILE.read_text(encoding="ascii").strip()
+        self.assertEqual(self.call("/api/setup", {"password": "langespasswort", "setup_code": right})[0], 429)
+
+    def test_local_mode_needs_no_code(self):
+        old = auth.LOCAL
+        try:
+            auth.LOCAL = True
+            self.assertFalse(auth.setup_code_required())
+        finally:
+            auth.LOCAL = old
+
+
 class Restore(unittest.TestCase):
     def test_base_currency_applied_immediately(self):
         old = config.BASE
