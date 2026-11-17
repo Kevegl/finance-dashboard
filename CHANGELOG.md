@@ -3,7 +3,24 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
-## Unveröffentlicht
+## 1.1.0
+
+### Neu
+- **Einrichtungscode für die Ersteinrichtung** (Server und Docker): Solange noch kein Passwort festgelegt ist,
+  verlangt das Dashboard einen einmaligen Code. So kann niemand im Netzwerk eine frische Installation vor dir
+  übernehmen. Der Code steht am Ende der Ausgabe von `install.sh`, im Protokoll (`journalctl -u finance-dashboard`
+  bzw. `docker logs finance-dashboard`) und in `setup-code.txt` im Datenordner. Bestehende Installationen und der
+  lokale Betrieb (Programm/`start.*`) sind nicht betroffen.
+- **Signierte Updates (optional, Proxmox):** Mit der Datei `/etc/finance-dashboard/allowed_signers` installiert der
+  Update-Dienst nur Versionen, die mit deinem eigenen SSH-Schlüssel signiert sind. Ein fremder Push auf GitHub
+  kann so keinen Code mehr als root im Container ausführen. *Einstellungen → Updates* zeigt das Ergebnis an.
+  Anleitung im README unter «Signierte Updates».
+
+### Verbessert
+- Interner Umbau: Der Server ist in fachliche Module aufgeteilt (Anmeldung, Datenbank, Kurse, News, Berechnung …),
+  Endpunkte laufen über Routing-Tabellen, und Datenbankverbindungen werden nach jeder Abfrage geschlossen.
+- Neue automatische Tests für Berechnung, Zahlen- und Datumsformate, Login-Sperre, Einrichtungscode und
+  Signaturprüfung.
 
 ### Behoben
 - **Ungültiges Datum legte das Dashboard lahm:** Eine Transaktion mit einem Datum wie «17.11.2026» oder «2024-13-45»
@@ -20,8 +37,11 @@ Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHu
   Fehlerhafte Zeilen in der Sicherungsdatei werden übersprungen.
 - Das Datum in der Transaktionsliste wird jetzt immer escapt.
 
-*English:* Fixes a dashboard outage caused by invalid dates, rejects infinite numbers, makes the login lockout
-race-free, counts proceeds of sales without a recorded purchase, and applies the backup's base currency immediately.
+*English:* New one-time setup code protects the first-run setup on servers and Docker; optional signature check
+for updates on Proxmox (only releases signed with your own SSH key are installed). Internal restructuring of the
+server into modules. Fixes a dashboard outage caused by invalid dates, rejects infinite numbers, makes the login
+lockout race-free, counts proceeds of sales without a recorded purchase, and applies the backup's base currency
+immediately.
 
 ## 1.0.4
 
