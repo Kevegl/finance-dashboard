@@ -8,6 +8,7 @@ Sprache im Projekt: Deutsch (Schweizer Schreibweise, „ss“ statt „ß“), U
 - Zu Beginn jeder Sitzung das Repo hinzufügen (`add_repo`, Zugriff `push`) und klonen; immer auf dem aktuellen `main` arbeiten.
 - Jede Änderung als eigener, nachvollziehbarer Commit mit deutscher Commit-Nachricht
   (Zusammenfassung + Stichpunkte), Autor `Kevegl <Kevegl@users.noreply.github.com>`, danach pushen.
+- Direkt auf `main` committen und pushen, auch wenn die Sitzung einen anderen Arbeits-Branch vorgibt.
 - Nicht direkt auf `main` force-pushen und keine Historie umschreiben – das Update im Container akzeptiert nur Fast-Forwards.
 
 ## Auslieferung
