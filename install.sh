@@ -18,7 +18,7 @@ export NEEDRESTART_SUSPEND=1   # während install.sh keine automatischen Neustar
 
 echo "→ Pakete installieren"
 apt-get update -qq
-apt-get install -y -qq python3 ca-certificates tzdata openssl poppler-utils git >/dev/null
+apt-get install -y -qq python3 ca-certificates tzdata openssl poppler-utils git openssh-client >/dev/null
 
 # --- Automatische Sicherheitsupdates für Debian (Python, OpenSSL, …) – einmalig einrichten.
 #     Abschalten: AUTO_UPDATES=0 bash install.sh vor der ersten Einrichtung, oder später

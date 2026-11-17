@@ -14,6 +14,12 @@ Verzeichnis, das nur root beschreiben kann.
 Kanal (FD_UPDATE_CHANNEL in /etc/finance-dashboard.env):
   main     -> jeder neue Commit auf dem Branch ist ein Update (Standard bei bestehenden Installationen)
   release  -> nur veröffentlichte Versionen (Git-Tags v1.2.3); Standard bei Neuinstallationen
+
+Signaturprüfung (empfohlen mit Kanal release): Liegt die Datei FD_UPDATE_SIGNERS (Standard
+/etc/finance-dashboard/allowed_signers, Format von ssh-keygen «allowed signers») vor, installiert der Dienst nur
+Versionen, deren Tag (Kanal release) bzw. neuester Commit (Kanal main) mit einem dort eingetragenen SSH-Schlüssel
+signiert ist. Weil install.sh als root läuft, schützt das davor, dass ein fremder Push auf GitHub (z.B. über ein
+gestohlenes Konto oder Token) Code als root im Container ausführt.
 """
 import fcntl
 import json
@@ -35,6 +41,7 @@ SERVICE = os.environ.get("FD_SERVICE", "finance-dashboard")
 ACTIONS = ("check", "update", "rollback")
 LOG_KEEP = 200          # Zeilen im Status-Log
 HEALTH_WAIT = 45        # Sekunden, die das Dashboard nach dem Update zum Starten hat
+DEFAULT_SIGNERS = "/etc/finance-dashboard/allowed_signers"
 
 
 def now():
@@ -60,6 +67,7 @@ class Updater:
         self.repo = self.env.get("FD_REPO_DIR", "")
         self.data_dir = Path(self.env.get("FD_DATA_DIR", "/var/lib/finance-dashboard"))
         self.status_file = STATE_DIR / "status.json"
+        self.signers = Path(self.env.get("FD_UPDATE_SIGNERS") or DEFAULT_SIGNERS)
         self.log_lines = []
 
     # ---------- Status ----------
@@ -96,6 +104,36 @@ class Updater:
         if check and r.returncode != 0:
             raise RuntimeError(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()}")
         return r.stdout.strip()
+
+    # ---------- Signatur ----------
+    def signing_required(self):
+        try:
+            return self.signers.is_file() and any(
+                ln.strip() and not ln.lstrip().startswith("#") for ln in self.signers.read_text(encoding="utf-8").splitlines())
+        except OSError:
+            return False
+
+    def verify(self, target, channel):
+        """Prüft die SSH-Signatur des Tags (Kanal release) bzw. des Commits (Kanal main) gegen allowed_signers.
+        Rückgabe: {"required", "ok", "signer"/"error"}. Der neueste Commit genügt: seine Signatur deckt den ganzen
+        Dateibaum ab, also genau das, was installiert wird."""
+        if not self.signing_required():
+            return {"required": False, "ok": None}
+        kind = "verify-tag" if channel == "release" else "verify-commit"
+        r = subprocess.run(["git", "-C", self.repo, "-c", f"gpg.ssh.allowedSignersFile={self.signers}",
+                            kind, "--raw", target], capture_output=True, text=True, timeout=60,
+                           env=dict(os.environ, LC_ALL="C", GIT_TERMINAL_PROMPT="0"))
+        out = (r.stderr + r.stdout).strip()
+        if r.returncode == 0:
+            m = re.search(r'Good "git" signature for (\S+)', out)
+            return {"required": True, "ok": True, "signer": m.group(1) if m else ""}
+        if "no signature" in out.lower() or not out:
+            err = "nicht signiert"
+        elif "No principal matched" in out or "not in allowed" in out.lower() or "Could not verify" in out:
+            err = "Schlüssel nicht in allowed_signers"
+        else:
+            err = (out.splitlines() or ["ungültige Signatur"])[-1][:160]
+        return {"required": True, "ok": False, "error": err}
 
     def commit_info(self, ref):
         out = self.git("log", "-1", "--format=%H%x1f%h%x1f%cI%x1f%s", ref)
@@ -134,7 +172,8 @@ class Updater:
         info = {"branch": branch if channel == "main" else f"{branch} · Releases ({target})", "upstream": upstream,
                 "channel": channel, "target": target, "current": self.commit_info("HEAD"),
                 "remote": self.commit_info(target), "behind": behind, "ahead": ahead, "dirty": dirty,
-                "commits": commits, "last_check": now()}
+                "commits": commits, "last_check": now(),
+                "signature": self.verify(target, channel) if behind else {"required": self.signing_required(), "ok": None}}
         return info
 
     # ---------- Installation ----------
@@ -211,6 +250,14 @@ class Updater:
             raise RuntimeError("Im Repository gibt es lokale Änderungen – Update abgebrochen (git status im Container).")
         if info["ahead"]:
             raise RuntimeError("Der lokale Stand weicht von GitHub ab (eigene Commits) – Update abgebrochen.")
+        sig = info["signature"]
+        if sig.get("required"):
+            if not sig.get("ok"):
+                raise RuntimeError(f"Signaturprüfung fehlgeschlagen ({sig.get('error')}) – Update abgebrochen. "
+                                   f"Erlaubte Schlüssel: {self.signers}")
+            self.log(f"✓ Signatur geprüft: {sig.get('signer') or 'ok'}")
+        else:
+            self.log(f"Hinweis: Signaturprüfung aus (keine Schlüssel in {self.signers}).")
         before = self.switch_to(info["target"], "update")
         info = self.inspect(fetch=False)
         info["previous"] = self.commit_info(before)

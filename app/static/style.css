@@ -441,6 +441,7 @@ label.check input { width: 18px; height: 18px; accent-color: var(--accent); marg
 .upd-state.ok { color: var(--up); }
 .upd-state.new { color: var(--accent); font-weight: 600; }
 .upd-state.err { color: var(--down); }
+.upd-grid .readonly small.warn { color: var(--down); }
 .upd-commits { margin: 0 0 12px; padding: 10px 12px 10px 28px; border: 1px solid var(--border); border-radius: 10px;
   max-height: 220px; overflow: auto; font-size: 13.5px; }
 .upd-commits li { margin: 3px 0; }

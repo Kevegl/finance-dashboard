@@ -230,10 +230,45 @@ und kannst sie per Klick installieren. Ein Punkt am Zahnrad zeigt an, dass ein U
 - **Sicherheit:** Das Dashboard läuft als eingeschränkter Benutzer und schreibt beim Klick nur eine Auftragsdatei.
   Ausgeführt wird sie vom root-Dienst `finance-dashboard-update`, der ausschliesslich `check`, `update` und `rollback`
   akzeptiert, nur Fast-Forward-Updates aus dem eigenen Repository holt und lokale Änderungen nie überschreibt.
+- **Signaturprüfung (empfohlen):** Weil `install.sh` beim Update als root läuft, könnte ein fremder Push auf GitHub
+  (gestohlenes Konto oder Token) Code im Container ausführen. Mit einer Liste erlaubter Schlüssel installiert der
+  Dienst nur Versionen, die mit deinem eigenen SSH-Schlüssel signiert sind – siehe [Signierte Updates](#signierte-updates).
 - **Automatischer Rollback:** Antwortet das Dashboard nach dem Update nicht, wird die vorherige Version wiederhergestellt.
   Zusätzlich gibt es den Button *Vorherige Version wiederherstellen*.
 - Im Container von Hand: `finance-dashboard-update check | update | rollback`, Status in
   `/var/lib/finance-dashboard-update/status.json`, Timer: `systemctl list-timers finance-dashboard-update-check.timer`.
+
+### Signierte Updates
+
+Einmalig auf deinem eigenen Computer einen Signaturschlüssel anlegen und Git sagen, dass er Tags damit signiert:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/finance_release -C "finance-dashboard release"
+```
+
+```bash
+git config --global gpg.format ssh && git config --global user.signingkey ~/.ssh/finance_release.pub
+```
+
+Im Container die Datei `/etc/finance-dashboard/allowed_signers` anlegen (eine Zeile pro erlaubtem Schlüssel, Inhalt
+von `~/.ssh/finance_release.pub` einsetzen) und den Kanal auf `release` stellen:
+
+```bash
+echo 'release namespaces="git" ssh-ed25519 AAAA…dein-öffentlicher-Schlüssel…' > /etc/finance-dashboard/allowed_signers
+```
+
+```bash
+sed -i 's/^FD_UPDATE_CHANNEL=.*/FD_UPDATE_CHANNEL=release/' /etc/finance-dashboard.env && grep -q '^FD_UPDATE_CHANNEL=' /etc/finance-dashboard.env || echo 'FD_UPDATE_CHANNEL=release' >> /etc/finance-dashboard.env
+```
+
+Ab dann installiert der Update-Dienst nur noch Releases, deren Tag mit diesem Schlüssel signiert ist
+(`git tag -s v1.2.3 -m "…"`, siehe [Neue Version veröffentlichen](#neue-version-veröffentlichen)). Ein unsigniertes
+Release zeigt *Einstellungen → Updates* als «Nicht installierbar» an. Auf dem Kanal `main` muss entsprechend der
+neueste Commit signiert sein. Ohne die Datei bleibt die Prüfung aus (bisheriges Verhalten). Anderer Pfad:
+`FD_UPDATE_SIGNERS=/pfad/zur/datei` in `/etc/finance-dashboard.env`.
+
+Hinweis: Die Prüfung betrifft die Proxmox-Installation mit Update-Dienst. Programm, Python-Variante und Docker laden
+Releases über HTTPS direkt von GitHub.
 
 **Privates Repository** (nur bei einem eigenen, privaten Fork): Der Container braucht einen Lesezugriff, am besten einen Deploy Key:
 ```bash
@@ -343,7 +378,8 @@ ebenfalls gern als Issue, am besten mit einer Beispieldatei mit erfundenen Werte
 cd app && python3 server.py      # Server-Modus, http://localhost:8080, Daten in data/
 python3 app/launcher.py          # lokaler Betrieb wie beim Doppelklick, http://127.0.0.1:8765
 python3 tests/smoke_server.py    # Kurztest Server-Modus inkl. Import aller Beispiel-CSVs
-python3 tests/calc_unit.py       # Unit-Tests: Zahlen, Daten, Berechnung, Login-Sperre
+python3 tests/calc_unit.py       # Unit-Tests: Zahlen, Daten, Berechnung, Login-Sperre, Einrichtungscode
+python3 tests/update_verify.py   # Signaturprüfung des Update-Dienstes (git + ssh-keygen)
 python3 tests/smoke_local.py     # Kurztest lokaler Betrieb (Start, Anmeldung, zweite Instanz, Beenden)
 ```
 
@@ -377,7 +413,9 @@ Startskripte und des Docker-Images.
 2. Auf GitHub unter *Releases → Draft a new release* den Tag `v1.1.0` anlegen (muss zu `app/VERSION` passen),
    Änderungen kurz beschreiben und auf *Publish release* klicken.
    Alternativ im Terminal: `git tag -a v1.1.0 -m "Änderungen …" && git push origin v1.1.0`. Die Tag-Nachricht
-   wird zu den Release-Notizen, das Release legt der Workflow selbst an.
+   wird zu den Release-Notizen, das Release legt der Workflow selbst an. Mit [signierten Updates](#signierte-updates)
+   den Tag mit `git tag -s` statt `-a` auf dem eigenen Computer anlegen – ein unsigniertes Release installiert der
+   Update-Dienst dann nicht.
 3. Der Workflow `.github/workflows/release.yml` baut dann automatisch:
    - das Docker-Image `ghcr.io/kevegl/finance-dashboard:1.1.0` bzw. `:latest`,
    - die Windows-`.exe` und die Mac-App, testet beide und hängt sie ans Release.

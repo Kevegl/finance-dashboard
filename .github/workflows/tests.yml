@@ -26,6 +26,8 @@ jobs:
           bash -n install.sh start.sh start.command finance-dashboard-cert.sh
       - name: Unit-Tests (Berechnung, Zahlen/Daten, Login-Sperre)
         run: python tests/calc_unit.py
+      - name: Signaturprüfung des Update-Dienstes
+        run: python tests/update_verify.py
       - name: Server-Modus mit Beispiel-CSV
         run: python tests/smoke_server.py
       - name: Windows-Zertifikate neu einlesen (Regressionstest)

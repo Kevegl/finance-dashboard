@@ -250,6 +250,8 @@ const EN_ERR = {
   "Ungültiges Datum": "Invalid date",
   "Ungültige Zahl": "Invalid number",
   "Der Einrichtungscode ist falsch.": "The setup code is wrong.",
+  "nicht signiert": "not signed",
+  "Schlüssel nicht in allowed_signers": "key not in allowed_signers",
   "Zu viele gleichzeitige Anmeldeversuche – bitte kurz warten.": "Too many simultaneous sign-in attempts – please wait a moment.",
   "Das Passwort muss mindestens 8 Zeichen lang sein.": "The password must be at least 8 characters long.",
 };
@@ -269,6 +271,7 @@ const EN_ERR_RX = [
   [/^GitHub nicht erreichbar: Das Zertifikat konnte nicht geprüft werden \(Windows-Zertifikatsspeicher unvollständig\)\. Bitte Windows Update ausführen oder die Seite einmal in Edge öffnen\.$/, "GitHub not reachable: the certificate could not be verified (Windows certificate store incomplete). Please run Windows Update or open the page once in Edge."],
   [/^Download fehlgeschlagen: Das Zertifikat konnte nicht geprüft werden \(Windows-Zertifikatsspeicher unvollständig\)\. Bitte Windows Update ausführen oder die Seite einmal in Edge öffnen\.$/, "Download failed: the certificate could not be verified (Windows certificate store incomplete). Please run Windows Update or open the page once in Edge."],
   [/^GitHub nicht erreichbar: (.*)$/, "GitHub not reachable: $1"],
+  [/^Signaturprüfung fehlgeschlagen \((.*)\) – Update abgebrochen\. Erlaubte Schlüssel: (.*)$/, "Signature check failed ($1) – update cancelled. Allowed keys: $2"],
   [/^Download fehlgeschlagen \(Fehler (\d+)\)\.$/, "Download failed (error $1)."],
   [/^Download fehlgeschlagen: (.*)$/, "Download failed: $1"],
   [/^Zeile (\d+): (.*) \(Ein-\/Auszahlung\) übersprungen$/, "Row $1: $2 (deposit/withdrawal) skipped"],

@@ -1323,6 +1323,12 @@ function renderUpdate() {
   else if (st.current && st.last_check) { cls = "ok"; html = esc(L("Auf dem neuesten Stand", "Up to date")); }
   else html = esc(L("Noch nicht geprüft", "Not checked yet"));
   if (!busy && st.last_check) html += `<small>${esc(L("Zuletzt geprüft: ", "Last checked: ") + updDate(st.last_check))}</small>`;
+  const sig = st.signature || {};
+  if (!busy && sig.required && st.behind > 0) {
+    html += sig.ok ? `<small>${esc(L("Signatur geprüft", "Signature verified") + (sig.signer ? `: ${sig.signer}` : ""))}</small>`
+      : `<small class="warn">${esc(L("Nicht installierbar – Signatur fehlt oder ist ungültig", "Cannot be installed – signature missing or invalid")
+        + (sig.error ? ` (${trErr(sig.error)})` : ""))}</small>`;
+  } else if (!busy && sig.required) html += `<small>${esc(L("Signaturprüfung aktiv", "Signature check active"))}</small>`;
   const el = $("#updState"); el.innerHTML = html; el.className = "readonly upd-state " + cls;
   const commits = st.behind > 0 ? (st.commits || []) : [];
   $("#updCommits").hidden = !commits.length;
@@ -1330,7 +1336,7 @@ function renderUpdate() {
   const docker = st.mode === "docker";
   $("#updDocker").hidden = !docker; $("#updHint").hidden = docker;
   $("#btnUpdInstall").hidden = docker || !(st.behind > 0);
-  $("#btnUpdInstall").disabled = busy || st.dirty || st.ahead > 0;
+  $("#btnUpdInstall").disabled = busy || st.dirty || st.ahead > 0 || (sig.required && sig.ok === false);
   $("#btnUpdCheck").disabled = busy;
   $("#btnUpdRollback").hidden = docker || !st.previous;
   $("#btnUpdRollback").disabled = busy;
