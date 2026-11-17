@@ -347,6 +347,20 @@ python3 tests/smoke_local.py     # Kurztest lokaler Betrieb (Start, Anmeldung, z
 
 Im Ordner `beispiel-csv/` liegen Testdateien für alle Formate (erfundene Werte).
 
+**Aufbau des Servers** (`app/`, nur Python-Standardbibliothek):
+
+| Datei | Inhalt |
+|---|---|
+| `server.py` | HTTP: Routing-Tabellen `GET_ROUTES`/`POST_ROUTES`, Anmeldeschutz, Start |
+| `config.py` | Umgebungsvariablen und Konstanten; `config.BASE` = aktuelle Basiswährung |
+| `store.py` | SQLite: `db_tx()` (Transaktion, schliesst die Verbindung), Schema/Migrationen, Einstellungen, Sicherung |
+| `validate.py` | Prüfung von Datum, Zahlen und Typ einer Transaktion |
+| `auth.py` | Passwort-Hash, Sitzungen, Zwei-Faktor, Wiederherstellungscode, Anmeldeprotokoll |
+| `portfolio.py` | Berechnung: Bestände, Kostenbasis, Erträge, Historie |
+| `prices.py`, `news.py`, `muni.py` | Kurse/Wechselkurse, News-Ticker, Gemeindesteuerfüsse (externe Abfragen) |
+| `importers.py`, `uploads.py` | CSV-Formate der Anbieter, PDF-/ZIP-Upload |
+| `updates.py`, `local_update.py`, `launcher.py` | Updates (root-Dienst, Releases), lokaler Betrieb |
+
 **Screenshots fürs README neu erstellen:** `python3 docs/screenshots/demo_data.py /tmp/fd-demo` legt ein
 Demo-Dashboard mit erfundenen Werten und Kursen an. Danach den Server damit starten
 (`FD_DATA_DIR=/tmp/fd-demo FD_PRICE_TTL=999999999 python3 app/server.py`) und

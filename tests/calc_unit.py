@@ -20,23 +20,29 @@ os.environ.pop("FD_LOCAL", None)
 os.environ.pop("FD_DOCKER", None)
 sys.path.insert(0, str(ROOT / "app"))
 
+import config     # noqa: E402
 import importers  # noqa: E402
+import portfolio  # noqa: E402
+import prices     # noqa: E402
 import server     # noqa: E402
+import store      # noqa: E402
+import validate   # noqa: E402
+import auth       # noqa: E402
 
-server.init_db()
+store.init_db()
 
 
 def add(pid, date, typ, asset, qty=0.0, price=0.0, total=None, ccy="CHF"):
     total = qty * price if total is None else total
-    with server.DB_LOCK, server.db() as con:
-        server.ensure_asset(con, {"asset": asset, "asset_class": "etf"})
+    with store.db_tx() as con:
+        store.ensure_asset(con, {"asset": asset, "asset_class": "etf"})
         con.execute("""INSERT INTO transactions (portfolio_id,date,type,asset,quantity,price,currency,fee,total,source,hash)
                        VALUES (?,?,?,?,?,?,?,0,?,'Test',?)""",
                     (pid, date, typ, asset, qty, price, ccy, total, f"{date}{typ}{asset}{qty}{total}"))
 
 
 def new_portfolio(name):
-    with server.DB_LOCK, server.db() as con:
+    with store.db_tx() as con:
         return con.execute("INSERT INTO portfolios(name, sort, kind) VALUES (?, 9, 'standard')", (name,)).lastrowid
 
 
@@ -81,9 +87,9 @@ class Dates(unittest.TestCase):
         self.assertEqual(importers.date_parser_for([])("17.11.2026"), "2026-11-17")
 
     def test_server_validation(self):
-        self.assertTrue(server.is_iso_date("2026-11-17"))
+        self.assertTrue(validate.is_iso_date("2026-11-17"))
         for bad in ("17.11.2026", "2024-13-45", "", None, 20261117, "2026-11-17<x>"):
-            self.assertFalse(server.is_iso_date(bad), bad)
+            self.assertFalse(validate.is_iso_date(bad), bad)
 
 
 class NormalizeTx(unittest.TestCase):
@@ -93,24 +99,24 @@ class NormalizeTx(unittest.TestCase):
         return b
 
     def test_buy_total_includes_fee(self):
-        t = server.normalize_tx(self.base(), "CHF")
+        t = validate.normalize_tx(self.base(), "CHF")
         self.assertEqual((t["asset"], t["total"], t["currency"]), ("VWRL", 101.0, "CHF"))
 
     def test_signs(self):
-        self.assertEqual(server.normalize_tx(self.base(type="fee", total="5"), "CHF")["total"], -5.0)
-        self.assertEqual(server.normalize_tx(self.base(type="deposit", total="-5"), "CHF")["total"], 5.0)
+        self.assertEqual(validate.normalize_tx(self.base(type="fee", total="5"), "CHF")["total"], -5.0)
+        self.assertEqual(validate.normalize_tx(self.base(type="deposit", total="-5"), "CHF")["total"], 5.0)
 
     def test_rejects(self):
         for kw in ({"date": "17.11.2026"}, {"date": "2024-13-45"}, {"date": 5}, {"price": "1e999"},
                    {"quantity": "nan"}, {"quantity": "abc"}, {"type": "gift"}, {"asset": " "}, {"currency": "EURO"},
                    {"quantity": "1e200", "price": "1e200"}):
             with self.assertRaises(ValueError, msg=kw):
-                server.normalize_tx(self.base(**kw), "CHF")
+                validate.normalize_tx(self.base(**kw), "CHF")
 
     def test_import_problem(self):
-        self.assertIsNone(server.import_problem({"date": "2026-01-01", "quantity": 1, "price": 1, "fee": 0, "total": 1}))
-        self.assertTrue(server.import_problem({"date": "2026-01-01", "quantity": float("inf"), "price": 1, "fee": 0, "total": 1}))
-        self.assertTrue(server.import_problem({"date": "2024-13-45", "quantity": 1, "price": 1, "fee": 0, "total": 1}))
+        self.assertIsNone(validate.import_problem({"date": "2026-01-01", "quantity": 1, "price": 1, "fee": 0, "total": 1}))
+        self.assertTrue(validate.import_problem({"date": "2026-01-01", "quantity": float("inf"), "price": 1, "fee": 0, "total": 1}))
+        self.assertTrue(validate.import_problem({"date": "2024-13-45", "quantity": 1, "price": 1, "fee": 0, "total": 1}))
 
 
 class Summary(unittest.TestCase):
@@ -119,7 +125,7 @@ class Summary(unittest.TestCase):
         add(pid, "2024-01-02", "buy", "AAA", 10, 100)    # 1000
         add(pid, "2024-02-02", "buy", "AAA", 10, 200)    # 2000 -> Ø 150
         add(pid, "2024-03-02", "sell", "AAA", 5, 300)    # Erlös 1500, Kosten 750
-        s = server.compute_summary(pid)
+        s = portfolio.compute_summary(pid)
         h = holding(s, "AAA")
         self.assertAlmostEqual(h["quantity"], 15)
         self.assertAlmostEqual(h["cost"], 2250)
@@ -132,14 +138,14 @@ class Summary(unittest.TestCase):
         pid = new_portfolio("Rundung")
         add(pid, "2024-01-02", "buy", "BBB", 3.0004, 10)
         add(pid, "2024-02-02", "sell", "BBB", 3.0, 12)
-        h = holding(server.compute_summary(pid), "BBB")
+        h = holding(portfolio.compute_summary(pid), "BBB")
         self.assertEqual(h["quantity"], 0.0)
         self.assertEqual(h["cost"], 0.0)
 
     def test_sell_without_purchase_keeps_proceeds(self):
         pid = new_portfolio("Ohne Kauf")
         add(pid, "2024-03-02", "sell", "CCC", 5, 40)
-        s = server.compute_summary(pid)
+        s = portfolio.compute_summary(pid)
         self.assertAlmostEqual(holding(s, "CCC")["realized"], 200)
         self.assertAlmostEqual(s["kpis"]["realized"], 200)
         self.assertEqual(s["basis_missing"], ["CCC"])
@@ -149,28 +155,28 @@ class Summary(unittest.TestCase):
         add(pid, "2024-01-02", "buy", "DDD", 1, 10)
         add(pid, "17.11.2026", "buy", "DDD", 1, 10)       # wie früher über die API ungeprüft gespeichert
         add(pid, "2024-01-03", "buy", "DDD", 1, float("inf"))
-        s = server.compute_summary(pid)
+        s = portfolio.compute_summary(pid)
         self.assertEqual(s["invalid_tx"], 2)
         self.assertAlmostEqual(holding(s, "DDD")["quantity"], 1)
         json.dumps(s, allow_nan=False, default=list)       # gültiges JSON für den Browser
-        with server.DB_LOCK, server.db() as con:
-            server.needed_tickers(con)                       # darf nicht mehr abbrechen
+        with store.db_tx() as con:
+            prices.needed_tickers(con)                       # darf nicht mehr abbrechen
 
 
 class Restore(unittest.TestCase):
     def test_base_currency_applied_immediately(self):
-        old = server.BASE
+        old = config.BASE
         try:
-            bk = server.make_backup()
+            bk = store.make_backup()
             bk["settings"]["base_ccy"] = "EUR"
             bk["transactions"].append(["kaputt"])            # falsche Zeilenlänge wird übersprungen
-            server.restore_backup(bk)
-            self.assertEqual(server.BASE, "EUR")
+            store.restore_backup(bk)
+            self.assertEqual(config.BASE, "EUR")
             with self.assertRaises(ValueError):
-                server.restore_backup(dict(bk, portfolios_columns="id,name"))
+                store.restore_backup(dict(bk, portfolios_columns="id,name"))
         finally:
-            server.set_setting("base_ccy", old)
-            server.BASE = old
+            store.set_setting("base_ccy", old)
+            config.BASE = old
 
 
 class LoginLock(unittest.TestCase):
@@ -178,8 +184,8 @@ class LoginLock(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        server.set_setting("auth_user", "test")
-        server.set_setting("auth_hash", server.hash_pw("richtig123", iterations=20_000))
+        store.set_setting("auth_user", "test")
+        store.set_setting("auth_hash", auth.hash_pw("richtig123", iterations=20_000))
         cls.httpd = server.Server(("127.0.0.1", 0), server.Handler)
         threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
         cls.url = f"http://127.0.0.1:{cls.httpd.server_address[1]}"
