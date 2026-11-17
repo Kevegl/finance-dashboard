@@ -12,6 +12,7 @@ total: Betrag in `currency` (bei buy inkl. Gebühren, bei sell netto erhalten)
 """
 import csv
 import io
+import math
 import re
 from datetime import datetime
 
@@ -62,6 +63,8 @@ def parse_num(v):
         n = float(s)
     except ValueError:
         return None
+    if not math.isfinite(n):        # z.B. "1e999" -> unendlich, in JSON für den Browser unlesbar
+        return None
     return -abs(n) if neg else n
 
 
@@ -108,9 +111,12 @@ def date_parser_for(values):
                 return datetime(y, mo, d).strftime("%Y-%m-%d")
             except ValueError:
                 return None
-        m = re.match(r"^(\d{4}-\d{2}-\d{2})", s)
+        m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", s)
         if m:
-            return m.group(1)
+            try:      # nur existierende Daten (2024-13-45 würde später die Auswertung abbrechen)
+                return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).strftime("%Y-%m-%d")
+            except ValueError:
+                return None
         return None
 
     return parse

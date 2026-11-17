@@ -246,6 +246,8 @@ const EN_ERR = {
   "Unbekannte Währung": "Unknown currency",
   "Ungültiger Typ": "Invalid type",
   "Ungültiges Datum": "Invalid date",
+  "Ungültige Zahl": "Invalid number",
+  "Zu viele gleichzeitige Anmeldeversuche – bitte kurz warten.": "Too many simultaneous sign-in attempts – please wait a moment.",
   "Das Passwort muss mindestens 8 Zeichen lang sein.": "The password must be at least 8 characters long.",
 };
 const EN_ERR_RX = [
@@ -269,6 +271,8 @@ const EN_ERR_RX = [
   [/^Zeile (\d+): (.*) \(Ein-\/Auszahlung\) übersprungen$/, "Row $1: $2 (deposit/withdrawal) skipped"],
   [/^(.*): (.*) \(Ein-\/Auszahlung\) übersprungen$/, "$1: $2 (deposit/withdrawal) skipped"],
   [/^(.*): kein Text im PDF \(gescannt\?\)$/, "$1: no text in PDF (scanned?)"],
+  [/^(.*): Datum unlesbar$/, "$1: unreadable date"],
+  [/^(.*): ungültige Zahl$/, "$1: invalid number"],
   [/^(.*): Anbieter nicht erkannt \(unterstützt: VIAC\)$/, "$1: provider not recognised (supported: VIAC)"],
   [/^(.*): Belegart nicht erkannt$/, "$1: document type not recognised"],
   [/^(.*): Datum nicht gefunden$/, "$1: date not found"],

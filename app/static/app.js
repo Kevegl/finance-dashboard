@@ -23,7 +23,10 @@ const amt = (v, ccy, opts) => (state.hide ? `${ccy || state.summary?.base || "CH
 const qtyS = (v) => (state.hide ? HIDDEN : qty(v));
 function pct(v) { return v == null || isNaN(v) ? "–" : (v > 0 ? "+" : "") + num(v, 2) + " %"; }
 function signed(v) { return (v > 0 ? "+" : v < 0 ? "−" : "") + (state.hide ? HIDDEN : money(Math.abs(v))); }
-function dateCH(d) { const [y, m, dd] = d.split("-"); return LANG === "en" ? `${dd}/${m}/${y}` : `${dd}.${m}.${y}`; }
+function dateCH(d) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d || "")) return esc(d);   // ungültiger Altbestand: unverändert, aber escapt
+  const [y, m, dd] = d.split("-"); return LANG === "en" ? `${dd}/${m}/${y}` : `${dd}.${m}.${y}`;
+}
 function compact(v) {
   return new Intl.NumberFormat(LOCALE, { notation: "compact", maximumFractionDigits: 1 }).format(v);
 }
@@ -200,6 +203,12 @@ function renderBanner(s) {
   const fx = `<b>${s.fx_missing.map(esc).join(", ")}</b> → ${esc(s.base)}`;
   if (s.fx_missing.length) msgs.push(L(`Wechselkurse für ${fx} fehlen noch (Kurs-Aktualisierung abwarten oder Internetzugang des Servers prüfen).`,
     `Exchange rates for ${fx} are still missing (wait for the price update or check the server's internet access).`));
+  const noBasis = s.basis_missing || [];
+  const nb = `<b>${noBasis.map(esc).join(", ")}</b>`;
+  if (noBasis.length) msgs.push(L(`Für ${nb} gibt es Verkäufe ohne erfassten Kauf – der Erlös zählt ganz als realisierter Gewinn. Fehlende Käufe nachimportieren (z.B. älteren Kontoauszug).`,
+    `${nb} has sales without a recorded purchase – the proceeds count fully as realised gain. Import the missing purchases (e.g. an older statement).`));
+  if (s.invalid_tx) msgs.push(L(`${s.invalid_tx} Transaktion${s.invalid_tx === 1 ? "" : "en"} mit ungültigem Datum oder Betrag ${s.invalid_tx === 1 ? "wird" : "werden"} nicht berücksichtigt – bitte unter „Transaktionen“ korrigieren oder löschen.`,
+    `${s.invalid_tx} transaction${s.invalid_tx === 1 ? "" : "s"} with an invalid date or amount ${s.invalid_tx === 1 ? "is" : "are"} ignored – please correct or delete ${s.invalid_tx === 1 ? "it" : "them"} under “Transactions”.`));
   b.innerHTML = msgs.join("<br>");
   b.hidden = !msgs.length;
 }

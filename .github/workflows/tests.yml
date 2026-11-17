@@ -24,6 +24,8 @@ jobs:
           python -m py_compile app/*.py finance-dashboard-update tests/*.py packaging/*.py
           for f in app/static/*.js; do node --check "$f"; done
           bash -n install.sh start.sh start.command finance-dashboard-cert.sh
+      - name: Unit-Tests (Berechnung, Zahlen/Daten, Login-Sperre)
+        run: python tests/calc_unit.py
       - name: Server-Modus mit Beispiel-CSV
         run: python tests/smoke_server.py
       - name: Windows-Zertifikate neu einlesen (Regressionstest)

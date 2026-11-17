@@ -24,6 +24,7 @@ import ssl
 import sys
 from http.cookies import SimpleCookie
 import json
+import math
 import os
 import re
 import sqlite3
@@ -57,6 +58,76 @@ def cash_effect(t, amount):
     if t["type"] == "withdrawal":
         return -abs(amount)
     return amount            # deposit (+), transfer (±), dividend, interest (+), tax, fee (−)
+
+
+DATE_GLOB = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
+ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def is_iso_date(s):
+    """True für ein existierendes Datum JJJJ-MM-TT (nicht nur das Format: 2024-13-45 ist ungültig)."""
+    if not isinstance(s, str) or not ISO_DATE.fullmatch(s):
+        return False
+    try:
+        date.fromisoformat(s)
+    except ValueError:
+        return False
+    return True
+
+
+def valid_date(s):
+    if not is_iso_date(s):
+        raise ValueError("Ungültiges Datum")
+    return s
+
+
+def fnum(v, default=0.0):
+    """Zahl aus einer Eingabe; leer -> default. Unendlich/NaN wären in JSON für den Browser unlesbar."""
+    if v is None or v == "":
+        return default
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        raise ValueError("Ungültige Zahl") from None
+    if not math.isfinite(x):
+        raise ValueError("Ungültige Zahl")
+    return x
+
+
+def normalize_tx(b, base):
+    """Prüft eine manuell erfasste oder bearbeitete Transaktion und vereinheitlicht Vorzeichen und Betrag."""
+    if not isinstance(b, dict):
+        raise ValueError("Ungültige Daten")
+    typ = b.get("type", "buy")
+    if typ not in TX_TYPES:
+        raise ValueError("Ungültiger Typ")
+    asset = str(b.get("asset") or "").strip().upper()
+    if not asset:
+        raise ValueError("Asset fehlt")
+    qty, price, fee = fnum(b.get("quantity")), fnum(b.get("price")), fnum(b.get("fee"))
+    total = fnum(b.get("total"), qty * price + (fee if typ == "buy" else -fee))
+    if not math.isfinite(total):          # z.B. Menge × Kurs ausserhalb des Zahlenbereichs
+        raise ValueError("Ungültige Zahl")
+    if typ in ("tax", "fee", "withdrawal"):
+        total = -abs(total)
+    elif typ in ("interest", "deposit"):
+        total = abs(total)
+    ccy = str(b.get("currency") or base).strip().upper()
+    if not re.fullmatch(r"[A-Z]{3}", ccy):
+        raise ValueError("Unbekannte Währung")
+    return dict(date=valid_date(b.get("date")), type=typ, asset=asset, quantity=qty, price=price,
+                currency=ccy, fee=fee, total=total, note=str(b.get("note") or ""))
+
+
+def import_problem(t):
+    """Grund, warum eine importierte Transaktion nicht gespeichert werden kann (sonst None)."""
+    if not is_iso_date(t.get("date")):
+        return "Datum unlesbar"
+    for k in ("quantity", "price", "fee", "total"):
+        v = t.get(k)
+        if not isinstance(v, (int, float)) or not math.isfinite(v):
+            return "ungültige Zahl"
+    return None
 
 HERE = Path(__file__).resolve().parent
 STATIC = HERE / "static"
@@ -272,13 +343,26 @@ def hash_pw(pw, iterations=310_000):
     return f"pbkdf2_sha256${iterations}${salt.hex()}${h.hex()}"
 
 
+class ServerBusy(Exception):
+    """Zu viele gleichzeitige Passwortprüfungen (Schutz vor CPU-Überlast durch PBKDF2)."""
+
+
+PW_SLOTS = threading.BoundedSemaphore(2)   # höchstens 2 PBKDF2-Berechnungen gleichzeitig
+
+
 def verify_pw(pw, stored):
     try:
         _, it, salt, h = stored.split("$")
-        calc = hashlib.pbkdf2_hmac("sha256", pw.encode(), bytes.fromhex(salt), int(it)).hex()
-        return hmac.compare_digest(calc, h)
+        salt_b, it_n = bytes.fromhex(salt), int(it)
     except Exception:  # noqa: BLE001
         return False
+    if not PW_SLOTS.acquire(timeout=10):
+        raise ServerBusy()
+    try:
+        calc = hashlib.pbkdf2_hmac("sha256", str(pw).encode(), salt_b, it_n).hex()
+    finally:
+        PW_SLOTS.release()
+    return hmac.compare_digest(calc, h)
 
 
 def auth_configured():
@@ -468,18 +552,26 @@ def restore_backup(data):
             src_cols = data.get(table + "_columns") or cols
             use = [c for c in src_cols if c in cols]
             idx = [src_cols.index(c) for c in use]
-            rows = [[row[i] for i in idx] for row in data.get(table, [])]
+            if not isinstance(src_cols, list) or not all(isinstance(c, str) for c in src_cols):
+                raise ValueError("Das ist keine gültige Sicherungsdatei des Finanz-Dashboards.")
+            rows = [[row[i] for i in idx] for row in data.get(table) or []
+                    if isinstance(row, list) and len(row) == len(src_cols)]
             con.executemany(f"INSERT INTO {table} ({','.join(use)}) VALUES ({','.join('?' * len(use))})", rows)
             counts[table] = len(rows)
-        con.executemany("INSERT OR REPLACE INTO prices(ticker, date, close) VALUES (?,?,?)",
-                        [tuple(r[:3]) for r in data.get("prices", [])])
-        counts["prices"] = len(data.get("prices", []))
+        prices = [tuple(r[:3]) for r in data.get("prices") or [] if isinstance(r, list) and len(r) >= 3]
+        con.executemany("INSERT OR REPLACE INTO prices(ticker, date, close) VALUES (?,?,?)", prices)
+        counts["prices"] = len(prices)
         if "kind" not in (data.get("portfolios_columns") or []):   # ältere Sicherung ohne Portfolio-Typ
             con.execute("""UPDATE portfolios SET kind='3a' WHERE id IN (SELECT DISTINCT portfolio_id FROM transactions
                            WHERE type IN ('deposit','withdrawal','transfer'))""")
         for k, v in (data.get("settings") or {}).items():
-            if not k.startswith("auth_"):
+            if isinstance(k, str) and not k.startswith("auth_") and (v is None or isinstance(v, str)):
                 con.execute("INSERT OR REPLACE INTO settings(key, value) VALUES (?,?)", (k, v))
+        # Basiswährung der Sicherung sofort übernehmen (nicht erst nach einem Neustart)
+        r = con.execute("SELECT value FROM settings WHERE key='base_ccy'").fetchone()
+        if r and r[0] in CURRENCIES:
+            global BASE
+            BASE = r[0]
     return counts
 
 
@@ -846,8 +938,8 @@ def resolve_isin_tickers():
 def needed_tickers(con):
     """Alle Kurs- und Devisen-Ticker, die für das Portfolio gebraucht werden."""
     tickers = {}
-    first = con.execute("SELECT MIN(date) FROM transactions").fetchone()[0]
-    if not first:
+    first = con.execute("SELECT MIN(date) FROM transactions WHERE date GLOB ?", (DATE_GLOB,)).fetchone()[0]
+    if not first or not is_iso_date(first):
         return {}
     start = datetime.strptime(first, "%Y-%m-%d").date() - timedelta(days=7)
     for a in con.execute("SELECT * FROM assets WHERE ticker != ''"):
@@ -1210,6 +1302,11 @@ def compute_summary(pid):
     with DB_LOCK, db() as con:
         txs = [dict(r) for r in con.execute("SELECT * FROM transactions WHERE portfolio_id=? ORDER BY date, id",
                                             (pid,))]
+        # Ältere Einträge mit unlesbarem Datum oder unendlichen Werten würden die ganze Berechnung abbrechen:
+        # überspringen und als Hinweis melden (in der Transaktionsliste bleiben sie sicht- und korrigierbar).
+        invalid_tx = {t["id"] for t in txs if import_problem(t)}
+        if invalid_tx:
+            txs = [t for t in txs if t["id"] not in invalid_tx]
         row = con.execute("SELECT COALESCE(kind,'standard') FROM portfolios WHERE id=?", (pid,)).fetchone()
         kind = row[0] if row else "standard"
         assets = {r["symbol"]: dict(r) for r in con.execute("SELECT * FROM assets")}
@@ -1254,7 +1351,7 @@ def compute_summary(pid):
 
     def blank(sym):
         return dict(symbol=sym, qty=0.0, cost=0.0, cost_ccy=0.0, realized=0.0, dividends=0.0, taxes=0.0,
-                    interest=0.0, acct_fees=0.0,
+                    interest=0.0, acct_fees=0.0, basis_missing=False,
                     last_tx_price=None, last_tx_ccy=None, sources=set())
 
     for t in txs:
@@ -1273,6 +1370,11 @@ def compute_summary(pid):
                 p["cost_ccy"] -= p["cost_ccy"] * share
                 p["cost"] -= removed
                 p["realized"] += t["total_base"] - removed
+            else:
+                # Kauf nicht erfasst (z.B. IBKR-Auszug ab einem späteren Datum): Erlös nicht verschlucken,
+                # sondern ohne Kostenbasis als realisiert zählen und in der Übersicht darauf hinweisen.
+                p["realized"] += t["total_base"]
+                p["basis_missing"] = True
             rest = p["qty"] - t["quantity"]
             # Rundungsreste (Anbieter runden Anteile auf 2–3 Stellen) gelten als geschlossen
             p["qty"] = rest if rest > max(1e-8, p["qty"] * 1e-3) else 0.0
@@ -1311,7 +1413,7 @@ def compute_summary(pid):
             value=value, gain=value - p["cost"] if p["qty"] else 0.0,
             gain_pct=((value - p["cost"]) / p["cost"] * 100) if p["cost"] > 0 and p["qty"] else None,
             realized=p["realized"], dividends=p["dividends"], taxes=p["taxes"], sources=sorted(p["sources"]),
-            interest=p["interest"], acct_fees=p["acct_fees"],
+            interest=p["interest"], acct_fees=p["acct_fees"], basis_missing=p["basis_missing"],
         ))
     # Portfolios mit erfassten Ein-/Auszahlungen (z.B. Säule 3a): Kontoguthaben und eigene Einlagen
     flow_txs = any(t["type"] in FLOW_TYPES for t in txs)
@@ -1424,7 +1526,8 @@ def compute_summary(pid):
                   + sum(h["acct_fees"] for h in holdings)),
         holdings=holdings, history=history,
         sources=sorted({t["source"] for t in txs}),
-        price_errors=stale, fx_missing=fx_missing,
+        price_errors=stale, fx_missing=fx_missing, invalid_tx=len(invalid_tx),
+        basis_missing=sorted(h["symbol"] for h in holdings if h.get("basis_missing")),
         last_refresh=last_ok or None,
     )
 
@@ -1673,20 +1776,41 @@ class Handler(BaseHTTPRequestHandler):
         secure = "; Secure" if TLS_CERT and TLS_KEY else ""
         return f"{COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={max_age}{secure}"
 
-    def _blocked(self):
+    def _reserve_attempt(self):
+        """Prüft die Sperre und zählt den Versuch im selben Schritt vorab als Fehlversuch (atomar, damit parallele
+        Anfragen die Grenze von 5 Versuchen nicht umgehen). Gibt eine Marke zurück oder None, wenn gesperrt.
+        Bei Erfolg gibt _release_attempt(marke) den Versuch wieder frei."""
         ip, now = self.client_address[0], time.time()
         with FAILED_LOCK:
+            for k in [k for k, v in FAILED.items() if not v or now - v[-1] >= FAIL_WINDOW]:
+                del FAILED[k]                      # abgelaufene Einträge anderer IPs aufräumen
             hits = [t for t in FAILED.get(ip, []) if now - t < FAIL_WINDOW]
+            if len(hits) >= MAX_FAILS:
+                FAILED[ip] = hits
+                return None
+            hits.append(now)
             FAILED[ip] = hits
-            return len(hits) >= MAX_FAILS
+            return now
+
+    def _release_attempt(self, stamp):
+        if stamp is None:
+            return
+        with FAILED_LOCK:
+            hits = FAILED.get(self.client_address[0], [])
+            if stamp in hits:
+                hits.remove(stamp)
 
     def _register_fail(self):
         with FAILED_LOCK:
             FAILED.setdefault(self.client_address[0], []).append(time.time())
 
+    def _blocked_reply(self):
+        self._log("login_blocked")
+        return self._send(429, {"error": "Zu viele Fehlversuche – bitte 15 Minuten warten."})
+
     def _send(self, code, body, ctype="application/json; charset=utf-8", extra=None):
         if isinstance(body, (dict, list)):
-            body = json.dumps(body, ensure_ascii=False, default=list).encode()
+            body = json.dumps(body, ensure_ascii=False, default=list, allow_nan=False).encode()
         elif isinstance(body, str):
             body = body.encode()
         self.send_response(code)
@@ -1722,9 +1846,11 @@ class Handler(BaseHTTPRequestHandler):
                 BLOCK_LOGGED[ip] = now
         log_auth(event, self.client_address[0], self.headers.get("User-Agent", ""))
 
-    def _fail(self, status, msg, event=None):
-        """Fehlversuch: zählt zur Sperre (5 in 15 Min.), optional ins Protokoll, kurze Verzögerung."""
-        self._register_fail()
+    def _fail(self, status, msg, event=None, counted=False):
+        """Fehlversuch: zählt zur Sperre (5 in 15 Min.), optional ins Protokoll, kurze Verzögerung.
+        counted=True: der Versuch wurde schon per _reserve_attempt gezählt."""
+        if not counted:
+            self._register_fail()
         if event:
             self._log(event)
         time.sleep(1)
@@ -1774,37 +1900,31 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "user": user, "recovery_code": code},
                               extra={"Set-Cookie": self._cookie(token, SESSION_DAYS * 86400)})
         if path == "/api/login":
-            if self._blocked():
-                self._log("login_blocked")
-                return self._send(429, {"error": "Zu viele Fehlversuche – bitte 15 Minuten warten."})
-            user = (body.get("username") or "").strip()
+            stamp = self._reserve_attempt()
+            if stamp is None:
+                return self._blocked_reply()
+            user = str(body.get("username") or "").strip()
             ok = auth_configured() and hmac.compare_digest(user.lower().encode(), (get_setting("auth_user") or "").lower().encode()) \
                 and verify_pw(body.get("password") or "", get_setting("auth_hash"))
             if not ok:
-                self._register_fail()
-                self._log("login_fail")
-                time.sleep(1)
-                return self._send(401, {"error": "Benutzername oder Passwort falsch."})
+                return self._fail(401, "Benutzername oder Passwort falsch.", "login_fail", counted=True)
             if totp_active():
                 if not str(body.get("code") or "").strip():
-                    return self._send(401, {"error": "totp_required"})   # zählt nicht als Fehlversuch
+                    self._release_attempt(stamp)                        # zählt nicht als Fehlversuch
+                    return self._send(401, {"error": "totp_required"})
                 if not totp_verify_login(body.get("code")):
-                    self._register_fail()
-                    self._log("totp_fail")
-                    time.sleep(1)
-                    return self._send(401, {"error": "Der Code aus der Authenticator-App ist falsch."})
+                    return self._fail(401, "Der Code aus der Authenticator-App ist falsch.", "totp_fail", counted=True)
+            self._release_attempt(stamp)
             token = create_session(get_setting("auth_user"))
             self._log("login_ok")
             return self._send(200, {"ok": True}, extra={"Set-Cookie": self._cookie(token, SESSION_DAYS * 86400)})
         if path == "/api/recovery":
-            if self._blocked():
-                self._log("login_blocked")
-                return self._send(429, {"error": "Zu viele Fehlversuche – bitte 15 Minuten warten."})
+            stamp = self._reserve_attempt()
+            if stamp is None:
+                return self._blocked_reply()
             if not auth_configured() or not recovery_check(body.get("code")):
-                self._register_fail()
-                self._log("recovery_fail")
-                time.sleep(1)
-                return self._send(401, {"error": "Der Wiederherstellungscode ist falsch."})
+                return self._fail(401, "Der Wiederherstellungscode ist falsch.", "recovery_fail", counted=True)
+            self._release_attempt(stamp)
             check_new_password(body.get("password"))
             set_setting("auth_hash", hash_pw(body["password"]))
             revoke_sessions()
@@ -1899,13 +2019,18 @@ class Handler(BaseHTTPRequestHandler):
                     with DB_LOCK, db() as con:
                         con.execute("DELETE FROM sessions WHERE token_hash=?", (_th(tok),))
                 return self._send(200, {"ok": True}, extra={"Set-Cookie": self._cookie("", 0)})
+            stamp = None
             if path in ("/api/account/password", "/api/account/totp/start", "/api/account/totp/confirm",
-                        "/api/account/totp/disable", "/api/account/recovery/new") and self._blocked():
-                return self._send(429, {"error": "Zu viele Fehlversuche – bitte 15 Minuten warten."})
+                        "/api/account/totp/disable", "/api/account/recovery/new"):
+                stamp = self._reserve_attempt()
+                if stamp is None:
+                    return self._send(429, {"error": "Zu viele Fehlversuche – bitte 15 Minuten warten."})
             if path in ("/api/account/password", "/api/account/totp/start", "/api/account/totp/disable", "/api/account/recovery/new"):
                 pw = body.get("current") if path == "/api/account/password" else body.get("password")
                 if not verify_pw(pw or "", get_setting("auth_hash")):
-                    return self._fail(403, "Das aktuelle Passwort ist falsch.", "password_fail")
+                    return self._fail(403, "Das aktuelle Passwort ist falsch.", "password_fail", counted=True)
+                self._release_attempt(stamp)
+                stamp = None
             if path == "/api/account/totp/start":
                 if totp_active():
                     return self._send(409, {"error": "Die Zwei-Faktor-Anmeldung ist bereits eingeschaltet."})
@@ -1917,7 +2042,8 @@ class Handler(BaseHTTPRequestHandler):
                 with TOTP_LOCK:
                     step = totp_match(pending, body.get("code"))
                     if not pending or step is None:
-                        return self._fail(400, "Der Code aus der Authenticator-App ist falsch.")
+                        return self._fail(400, "Der Code aus der Authenticator-App ist falsch.", counted=True)
+                    self._release_attempt(stamp)
                     set_setting("auth_totp_secret", pending)
                     set_setting("auth_totp_last", str(step))
                     set_setting("auth_totp_pending", None)
@@ -2049,6 +2175,8 @@ class Handler(BaseHTTPRequestHandler):
                 request_exit(0)
                 return self._send(200, {"ok": True})
             return self._send(404, {"error": "nicht gefunden"})
+        except ServerBusy:
+            return self._send(503, {"error": "Zu viele gleichzeitige Anmeldeversuche – bitte kurz warten."})
         except importers.ImportErrorDetail as e:
             return self._send(422, {"error": str(e)})
         except (ValueError, KeyError) as e:
@@ -2066,6 +2194,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._edit_tx(int(mt.group(1)), self._json())
             except (ValueError, KeyError) as e:
                 return self._send(400, {"error": str(e)})
+            except Exception as e:  # noqa: BLE001
+                return self._send(500, {"error": str(e)})
         m = re.match(r"^/api/assets/(.+)$", path)
         if not m:
             return self._send(404, {"error": "nicht gefunden"})
@@ -2108,7 +2238,14 @@ class Handler(BaseHTTPRequestHandler):
             if not text.strip():
                 raise ValueError("Leere Datei")
             res = importers.parse(text, body.get("provider") or "auto", body.get("mapping"), body.get("defaults"))
-        txs = with_hashes(res["transactions"])
+        valid = []
+        for t in res["transactions"]:
+            why = import_problem(t)
+            if why:
+                res["skipped"].append(f"{t.get('date') or '?'} {t.get('asset') or ''}: {why}".strip())
+            else:
+                valid.append(t)
+        txs = with_hashes(valid)
         pid = self._pid(body)
         with DB_LOCK, db() as con:
             existing = {r[0] for r in con.execute("SELECT hash FROM transactions WHERE portfolio_id=?", (pid,))}
@@ -2133,24 +2270,9 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(200, res)
 
     def _add_manual(self, b):
-        typ = b.get("type", "buy")
-        if typ not in TX_TYPES:
-            raise ValueError("Ungültiger Typ")
-        qty = float(b.get("quantity") or 0)
-        price = float(b.get("price") or 0)
-        fee = float(b.get("fee") or 0)
-        total = b.get("total")
-        total = float(total) if total not in (None, "") else (qty * price + (fee if typ == "buy" else -fee))
-        if typ in ("tax", "fee", "withdrawal"):
-            total = -abs(total)
-        elif typ in ("interest", "deposit"):
-            total = abs(total)
-        tx = dict(date=b["date"], type=typ, asset=b["asset"].strip().upper(), quantity=qty, price=price,
-                  currency=(b.get("currency") or BASE).upper(), fee=fee, total=total,
-                  source=b.get("source") or "Manuell", note=b.get("note", ""),
-                  asset_class=b.get("asset_class", "etf"), name=b.get("name", ""))
-        if not tx["asset"]:
-            raise ValueError("Asset fehlt")
+        tx = normalize_tx(b, BASE)
+        tx.update(source=str(b.get("source") or "Manuell"), asset_class=b.get("asset_class", "etf"),
+                  name=b.get("name", ""))
         with_hashes([tx])
         tx["hash"] += f"-{time.time()}"
         with DB_LOCK, db() as con:
@@ -2158,37 +2280,21 @@ class Handler(BaseHTTPRequestHandler):
             con.execute("""INSERT INTO transactions
                            (portfolio_id,date,type,asset,quantity,price,currency,fee,total,source,note,hash)
                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-                        (self._pid(b), tx["date"], typ, tx["asset"], qty, price, tx["currency"], fee, total, tx["source"],
-                         tx["note"], tx["hash"]))
+                        (self._pid(b), tx["date"], tx["type"], tx["asset"], tx["quantity"], tx["price"],
+                         tx["currency"], tx["fee"], tx["total"], tx["source"], tx["note"], tx["hash"]))
         threading.Thread(target=refresh_prices, daemon=True).start()
         return self._send(200, {"ok": True})
 
     def _edit_tx(self, tx_id, b):
-        typ = b.get("type", "buy")
-        if typ not in TX_TYPES:
-            raise ValueError("Ungültiger Typ")
-        if not re.match(r"^\d{4}-\d{2}-\d{2}$", b.get("date", "")):
-            raise ValueError("Ungültiges Datum")
-        asset = (b.get("asset") or "").strip().upper()
-        if not asset:
-            raise ValueError("Asset fehlt")
-        qty = float(b.get("quantity") or 0)
-        price = float(b.get("price") or 0)
-        fee = float(b.get("fee") or 0)
-        total = b.get("total")
-        total = float(total) if total not in (None, "") else (qty * price + (fee if typ == "buy" else -fee))
-        if typ in ("tax", "fee", "withdrawal"):
-            total = -abs(total)
-        elif typ in ("interest", "deposit"):
-            total = abs(total)
+        tx = normalize_tx(b, BASE)
         with DB_LOCK, db() as con:
             if not con.execute("SELECT 1 FROM transactions WHERE id=?", (tx_id,)).fetchone():
                 return self._send(404, {"error": "Transaktion nicht gefunden"})
-            ensure_asset(con, dict(asset=asset, asset_class=b.get("asset_class", "etf"), name=""))
+            ensure_asset(con, dict(asset=tx["asset"], asset_class=b.get("asset_class", "etf"), name=""))
             con.execute("""UPDATE transactions SET date=?, type=?, asset=?, quantity=?, price=?, currency=?,
                            fee=?, total=?, source=?, note=? WHERE id=?""",
-                        (b["date"], typ, asset, qty, price, (b.get("currency") or BASE).upper()[:3], fee, total,
-                         (b.get("source") or "Manuell").strip(), b.get("note", ""), tx_id))
+                        (tx["date"], tx["type"], tx["asset"], tx["quantity"], tx["price"], tx["currency"], tx["fee"],
+                         tx["total"], str(b.get("source") or "Manuell").strip(), tx["note"], tx_id))
             self._cleanup_assets(con)
         threading.Thread(target=refresh_prices, daemon=True).start()
         return self._send(200, {"ok": True})

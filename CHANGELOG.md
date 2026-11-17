@@ -3,6 +3,26 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## Unveröffentlicht
+
+### Behoben
+- **Ungültiges Datum legte das Dashboard lahm:** Eine Transaktion mit einem Datum wie «17.11.2026» oder «2024-13-45»
+  (manuell erfasst oder importiert) führte dazu, dass Übersicht und Kursaktualisierung aller Portfolios
+  abbrachen. Datum und Zahlen werden jetzt beim Erfassen, Bearbeiten und Importieren geprüft. Bereits gespeicherte
+  ungültige Einträge werden übersprungen und in der Übersicht gemeldet.
+- **Unendliche Zahlen** (z.B. «1e999» in einer CSV) machten die Antwort des Servers für den Browser unlesbar.
+  Sie werden jetzt abgewiesen.
+- **Login-Sperre:** Parallele Anfragen konnten die Grenze von 5 Fehlversuchen in 15 Minuten umgehen. Versuche werden
+  jetzt atomar gezählt, und es laufen höchstens zwei Passwortprüfungen gleichzeitig.
+- **Verkauf ohne erfassten Kauf** (z.B. IBKR-Auszug ab einem späteren Datum): Der Erlös fehlte im realisierten
+  Gewinn. Er wird jetzt mitgezählt, mit einem Hinweis in der Übersicht.
+- **Sicherung wiederherstellen:** Die Basiswährung der Sicherung gilt sofort, nicht erst nach einem Neustart.
+  Fehlerhafte Zeilen in der Sicherungsdatei werden übersprungen.
+- Das Datum in der Transaktionsliste wird jetzt immer escapt.
+
+*English:* Fixes a dashboard outage caused by invalid dates, rejects infinite numbers, makes the login lockout
+race-free, counts proceeds of sales without a recorded purchase, and applies the backup's base currency immediately.
+
 ## 1.0.4
 
 ### Behoben

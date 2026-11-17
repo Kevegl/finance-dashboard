@@ -341,6 +341,7 @@ ebenfalls gern als Issue, am besten mit einer Beispieldatei mit erfundenen Werte
 cd app && python3 server.py      # Server-Modus, http://localhost:8080, Daten in data/
 python3 app/launcher.py          # lokaler Betrieb wie beim Doppelklick, http://127.0.0.1:8765
 python3 tests/smoke_server.py    # Kurztest Server-Modus inkl. Import aller Beispiel-CSVs
+python3 tests/calc_unit.py       # Unit-Tests: Zahlen, Daten, Berechnung, Login-Sperre
 python3 tests/smoke_local.py     # Kurztest lokaler Betrieb (Start, Anmeldung, zweite Instanz, Beenden)
 ```
 
