@@ -4,7 +4,7 @@ Selbst gehostetes Portfolio-Dashboard (Relai, IBKR, Finpension, VIAC) für ein P
 Sprache im Projekt: Deutsch (Schweizer Schreibweise, „ss“ statt „ß“), UI zweisprachig DE/EN.
 
 ## GitHub ist die einzige Quelle
-- Repository: `Kevegl/finance-dashboard`, Branch `main`. Keine Zips mehr erstellen oder verteilen.
+- Repository: `Kevegl/finance-dashboard`, Branch `main`. Keine Zips erstellen oder verteilen.
 - Zu Beginn jeder Sitzung das Repo hinzufügen (`add_repo`, Zugriff `push`) und klonen; immer auf dem aktuellen `main` arbeiten.
 - Jede Änderung als eigener, nachvollziehbarer Commit mit deutscher Commit-Nachricht
   (Zusammenfassung + Stichpunkte), Autor `Kevegl <Kevegl@users.noreply.github.com>`, danach pushen.
@@ -48,12 +48,12 @@ Sprache im Projekt: Deutsch (Schweizer Schreibweise, „ss“ statt „ß“), U
 ## Testen vor dem Push
 - `cd app && FD_DATA_DIR=/tmp/fd-test FD_PORT=18080 python3 server.py`, Ersteinrichtung per `/api/setup`,
   Importe mit den Dateien aus `beispiel-csv/` prüfen.
-- `python3 -m py_compile app/*.py finance-dashboard-update`, `node --check app/static/*.js`, `bash -n install.sh`.
+- `python3 -m py_compile app/*.py finance-dashboard-update tests/*.py packaging/*.py`, `for f in app/static/*.js; do node --check "$f"; done`, `bash -n install.sh`.
 - `python3 tests/smoke_server.py` und `python3 tests/smoke_local.py` (laufen auch in GitHub Actions auf Windows/macOS/Linux).
 - Bei UI-Änderungen einen Screenshot (hell/dunkel, Desktop/Handy) ansehen; README bei neuen Funktionen ergänzen.
 
 ## Arbeitsteilung (Projektleiter und Arbeiter)
-- Die Hauptsitzung (Opus) ist der Projektleiter: Sie plant, zerlegt Aufgaben, delegiert, prüft die Ergebnisse und ist allein für Commit und Push zuständig.
-- Arbeiter sind Subagenten mit Sonnet 5.5, definiert in `.claude/agents/`: `umsetzer` (Code schreiben) und `tester` (Tests nach dem Abschnitt «Testen vor dem Push»).
+- Die Hauptsitzung ist der Projektleiter: Sie plant, zerlegt Aufgaben, delegiert, prüft die Ergebnisse und ist allein für Commit und Push zuständig.
+- Arbeiter sind Subagenten (Modell laut `model:` im Frontmatter), definiert in `.claude/agents/`: `umsetzer` (Code schreiben) und `tester` (Tests nach dem Abschnitt «Testen vor dem Push»).
 - Kleine Änderungen macht der Projektleiter direkt; Subagenten lohnen sich erst bei grösseren Umbauten oder mehreren unabhängigen Teilaufgaben.
 - Vor jedem Commit prüft der Projektleiter den Diff selbst (Datenschutz-Abschnitt), auch wenn der `tester` gemeldet hat, alles sei in Ordnung.
