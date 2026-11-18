@@ -1,192 +1,192 @@
-# Finanz-Dashboard
+# Finance Dashboard
 
-Schlankes, selbst gehostetes Portfolio-Dashboard – lokal auf deinem Computer (Windows, macOS, Linux)
-oder auf einem eigenen Server bzw. im Proxmox-Homelab.
-Importiert CSV-Exporte von **Relai** (Bitcoin) und **Interactive Brokers** (ETFs/Aktien) sowie beliebige andere CSVs per Spalten-Zuordnung.
+**English** | [Deutsch](README.de.md)
 
-- Keine externen Python-Pakete – nur Python 3 + SQLite
-- Live-Kurse und Wechselkurse über Yahoo Finance (ohne API-Key), automatisch alle 4 h
-- Bewertung in Basiswährung (Standard CHF), Kostenbasis nach Durchschnittskosten-Methode
-- Duplikat-Erkennung: dieselbe Datei (oder IBKR-Statement + Flex Query) kann mehrfach importiert werden
-- Hell/Dunkel-Modus, funktioniert auch auf dem Handy
-- Spartipps & Vorsorge: Steuer-Schätzung, 3a-Stand, FIRE-/Pensionsrechner und Fristen (Kanton Zürich)
+A lean, self-hosted portfolio dashboard – runs locally on your computer (Windows, macOS, Linux) or on your own
+server / Proxmox homelab. Imports CSV exports from **Relai** (Bitcoin) and **Interactive Brokers** (ETFs/stocks),
+plus any other CSV through column mapping, and PDF statements from Finpension and VIAC (Swiss pillar 3a).
 
-Weitere Funktionen folgen, z.B. Importe von weiteren Brokern und 3a-Anbietern. Probleme oder Wünsche bitte als
-[Issue](https://github.com/Kevegl/finance-dashboard/issues) melden, siehe [Probleme & Wünsche](#probleme--wünsche).
+- No external Python packages – just Python 3 and SQLite
+- Live prices and exchange rates from Yahoo Finance (no API key), refreshed every 4 h
+- Valuation in your base currency (default CHF), cost basis by the average-cost method
+- Duplicate detection: the same file (or an IBKR statement plus a Flex Query) can be imported repeatedly
+- Light/dark mode, works on phones too
+- Savings tips & retirement: tax estimate, pillar 3a status, FIRE and pension calculators, deadlines (canton of Zurich)
+- UI in German and English
+
+More features are planned, e.g. imports from further brokers and 3a providers. Please report problems or wishes as an
+[issue](https://github.com/Kevegl/finance-dashboard/issues), see [Problems & wishes](#problems--wishes).
+
+> The UI and the tax/retirement features are tailored to Switzerland (CHF, pillar 3a, canton of Zurich). The portfolio
+> part works with any base currency.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dunkel.png">
-  <img src="docs/screenshots/dashboard-hell.png" alt="Übersicht des Finanz-Dashboards mit Gesamtwert, Wertentwicklung, Aufteilung und Positionen">
+  <img src="docs/screenshots/dashboard-hell.png" alt="Overview of the dashboard with total value, performance, allocation and positions">
 </picture>
 
-<sub>Alle Werte in den Bildern sind erfunden (Beispieldaten aus <code>beispiel-csv/</code>).</sub>
+<sub>All values in the images are made up (sample data from <code>beispiel-csv/</code>).</sub>
 
-## So funktioniert's
+## How it works
 
-1. **Exporte herunterladen** – bei Relai, Interactive Brokers, Finpension oder VIAC die Transaktionen als CSV
-   bzw. die PDF-Belege speichern. Bei anderen Anbietern geht jede CSV-Datei.
-2. **Importieren** – Datei ins Dashboard ziehen. Es erkennt den Anbieter, zeigt eine Vorschau und überspringt
-   Einträge, die schon vorhanden sind. Erst mit dem Klick auf *Importieren* wird etwas gespeichert.
-3. **Überblick behalten** – Kurse und Wechselkurse werden automatisch aktualisiert. Oben siehst du Gesamtwert,
-   investiertes Geld und Gewinn, darunter die Entwicklung über die Zeit, die Aufteilung und alle Positionen.
+1. **Download your exports** – transactions as CSV (Relai, Interactive Brokers, Finpension) or the PDF statements
+   (VIAC). For other providers any CSV file works.
+2. **Import** – drag the file into the dashboard. It recognises the provider, shows a preview and skips entries that
+   already exist. Nothing is saved until you click *Import*.
+3. **Keep the overview** – prices and exchange rates update automatically. At the top you see total value, money
+   invested and profit, below that the development over time, the allocation and all positions.
 
 <table>
   <tr>
-    <td width="62%" valign="top"><img src="docs/screenshots/import.png" alt="Import mit automatischer Erkennung und Vorschau"></td>
-    <td valign="top"><img src="docs/screenshots/handy.png" alt="Dashboard auf dem Handy im dunklen Modus"></td>
+    <td width="62%" valign="top"><img src="docs/screenshots/import.png" alt="Import with automatic detection and preview"></td>
+    <td valign="top"><img src="docs/screenshots/handy.png" alt="Dashboard on a phone in dark mode"></td>
   </tr>
   <tr>
-    <td><b>Import:</b> Anbieter wird erkannt, Vorschau vor dem Speichern, Duplikate werden übersprungen.</td>
-    <td><b>Handy:</b> passt sich an kleine Bildschirme an, hell oder dunkel.</td>
+    <td><b>Import:</b> provider is detected, preview before saving, duplicates are skipped.</td>
+    <td><b>Phone:</b> adapts to small screens, light or dark.</td>
   </tr>
 </table>
 
-**Mehrere Portfolios und Säule 3a** – jedes Konto bekommt einen eigenen Reiter. Bei 3a-Konten rechnet das
-Dashboard mit den Einzahlungen: *Selbst einbezahlt* gegenüber *Gesamtwert*, inklusive Kontoguthaben.
+**Multiple portfolios and pillar 3a** – every account gets its own tab. For 3a accounts the dashboard works with the
+payments made: *paid in by you* versus *total value*, including cash balance.
 
-<img src="docs/screenshots/saeule-3a.png" alt="Säule-3a-Portfolio mit Einzahlungen und Wertentwicklung">
+<img src="docs/screenshots/saeule-3a.png" alt="Pillar 3a portfolio with payments and performance">
 
-**Spartipps & Vorsorge** (Glühbirne oben rechts) – Fristen der nächsten Monate, wie viel 3a-Einzahlungen und
-PK-Einkäufe an Steuern sparen, Gemeindevergleich sowie ein FIRE- und Pensionsrechner. Die Angaben im Profil
-werden nur in deinem Dashboard gespeichert.
+**Savings tips & retirement** (light bulb at the top right) – deadlines for the coming months, how much 3a payments
+and pension-fund buy-ins save in taxes, municipality comparison, and a FIRE and pension calculator. The data in your
+profile is stored only in your own dashboard.
 
-<img src="docs/screenshots/spartipps.png" alt="Ansicht Spartipps & Vorsorge mit Fristen, Steuerersparnis und Profil">
+<img src="docs/screenshots/spartipps.png" alt="Savings tips & retirement view with deadlines, tax savings and profile">
 
-**Einstellungen → Programm und Updates** – zeigt Version und Datenordner, prüft täglich auf neue Versionen und
-installiert sie per Klick. Startet eine neue Version nicht, kehrt das Dashboard automatisch zur bisherigen zurück.
+**Settings → Program and updates** – shows the version and data folder, checks daily for new versions and installs
+them with one click. If a new version does not start, the dashboard automatically returns to the previous one.
 
-<img src="docs/screenshots/einstellungen.png" width="640" alt="Einstellungen mit Programm-Infos und Update-Prüfung">
+<img src="docs/screenshots/einstellungen.png" width="640" alt="Settings with program info and update check">
 
-## Welche Variante passt zu mir?
+## Which variant suits me?
 
-| Du hast …                                   | Empfehlung                                                   | Updates                         |
-|---------------------------------------------|--------------------------------------------------------------|---------------------------------|
-| einen Windows-PC oder Mac, keine Technik-Lust | [**Programm** herunterladen](#programm-windows--mac)         | per Klick im Dashboard          |
-| Windows, Mac oder Linux mit Python           | [**Python-Variante**](#python-variante-windows-mac-linux)    | per Klick im Dashboard          |
-| ein NAS (Synology, QNAP), Raspberry Pi, Docker | [**Docker**](#docker-nas-raspberry-pi)                       | `docker compose pull`           |
-| einen Proxmox-Server / Linux-Server          | [**Proxmox (LXC)**](#installation-auf-proxmox-lxc)           | per Klick im Dashboard          |
+| You have …                                   | Recommendation                                               | Updates                         |
+|----------------------------------------------|--------------------------------------------------------------|---------------------------------|
+| a Windows PC or Mac, no wish to fiddle        | [**Download the program**](#program-windows--mac)            | one click in the dashboard      |
+| Windows, Mac or Linux with Python            | [**Python variant**](#python-variant-windows-mac-linux)      | one click in the dashboard      |
+| a NAS (Synology, QNAP), Raspberry Pi, Docker | [**Docker**](#docker-nas-raspberry-pi)                       | `docker compose pull`           |
+| a Proxmox server / Linux server              | [**Proxmox (LXC)**](#installation-on-proxmox-lxc)            | one click in the dashboard      |
 
-Bei den ersten beiden Varianten läuft das Dashboard nur auf deinem Computer (`http://127.0.0.1:8765`) und ist
-im Netzwerk nicht erreichbar. Sie brauchen weder eine Installation noch Administratorrechte. Server und Docker
-sind dafür auch vom Handy aus erreichbar, zu Hause oder per VPN.
+With the first two variants the dashboard only runs on your computer (`http://127.0.0.1:8765`) and is not reachable
+from the network. They need no installation and no administrator rights. Server and Docker are also reachable from
+your phone, at home or through a VPN.
 
-## Programm (Windows & Mac)
+## Program (Windows & Mac)
 
-1. Auf GitHub unter [**Releases**](https://github.com/Kevegl/finance-dashboard/releases/latest) die passende Datei
-   herunterladen:
+1. On GitHub under [**Releases**](https://github.com/Kevegl/finance-dashboard/releases/latest) download the matching
+   file:
    - Windows: `FinanzDashboard-<version>-windows-x64.zip`
-   - Mac mit Apple-Chip (M1 oder neuer): `FinanzDashboard-<version>-macos-arm64.zip`. Für ältere Intel-Macs
-     die [Python-Variante](#python-variante-windows-mac-linux) verwenden.
-2. Die ZIP-Datei entpacken, z.B. in *Dokumente* (Windows) bzw. in *Programme* (Mac).
-3. **Starten:**
-   - Windows: `FinanzDashboard.exe` doppelklicken. Beim ersten Start warnt Windows («Der Computer wurde durch
-     Windows geschützt»), weil das Programm nicht kostenpflichtig signiert ist. Klicke dann auf
-     *Weitere Informationen → Trotzdem ausführen*.
-   - Mac: `FinanzDashboard.app` mit *Rechtsklick → Öffnen* starten. Erscheint stattdessen nur eine Warnung:
-     *Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen*. Das ist nur beim ersten Mal nötig.
-4. Der Browser öffnet sich. Beim ersten Aufruf legst du Benutzername und Passwort fest.
+   - Mac with Apple silicon (M1 or newer): `FinanzDashboard-<version>-macos-arm64.zip`. For older Intel Macs use the
+     [Python variant](#python-variant-windows-mac-linux).
+2. Unzip the file, e.g. into *Documents* (Windows) or *Applications* (Mac).
+3. **Start:**
+   - Windows: double-click `FinanzDashboard.exe`. On first start Windows warns you («Windows protected your PC»)
+     because the program is not signed with a paid certificate. Click *More info → Run anyway*.
+   - Mac: start `FinanzDashboard.app` with *right-click → Open*. If only a warning appears instead:
+     *System Settings → Privacy & Security → Open Anyway*. This is only needed the first time.
+4. Your browser opens. On the first visit you choose a username and password.
 
-Solange das Dashboard läuft, zeigt ein kleines **Statusfenster** «Finanz-Dashboard – Läuft auf diesem Computer»
-mit den Knöpfen *Im Browser öffnen* und *Beenden*. Es bleibt in der Taskleiste bzw. im Dock, auch wenn du den
-Browser schliesst, und lässt sich minimieren. Schliesst du das Fenster, wird das Dashboard beendet. Beenden geht
-auch im Dashboard unter *Einstellungen → Programm → Dashboard beenden*. Klickst du das Programm erneut an, während
-es schon läuft, öffnet sich nur der Browser. Meldungen zur Fehlersuche stehen in `local/launcher.log` im
-Datenordner (siehe unten).
+While the dashboard runs, a small **status window** shows «Finance Dashboard – running on this computer» with the
+buttons *Open in browser* and *Quit*. It stays in the taskbar or dock even if you close the browser, and can be
+minimised. Closing the window quits the dashboard. You can also quit under *Settings → Program → Quit dashboard*.
+If you launch the program again while it is running, it only opens the browser. Troubleshooting messages are in
+`local/launcher.log` in the data folder (see below).
 
-## Python-Variante (Windows, Mac, Linux)
+## Python variant (Windows, Mac, Linux)
 
-1. **Python 3.10 oder neuer** installieren, falls noch nicht vorhanden:
-   [python.org/downloads](https://www.python.org/downloads/). Unter Windows dabei *Add python.exe to PATH* anhaken.
-   Unter Linux ist Python meist schon installiert.
-2. Auf GitHub unter [**Releases**](https://github.com/Kevegl/finance-dashboard/releases/latest) bei der neuesten
-   Version *Source code (zip)* herunterladen und entpacken.
-3. **Starten** per Doppelklick:
+1. Install **Python 3.10 or newer** if you do not have it yet:
+   [python.org/downloads](https://www.python.org/downloads/). On Windows tick *Add python.exe to PATH*.
+   On Linux Python is usually already installed.
+2. On GitHub under [**Releases**](https://github.com/Kevegl/finance-dashboard/releases/latest) download *Source code
+   (zip)* of the latest version and unzip it.
+3. **Start** with a double-click:
    - Windows: `start.bat`
-   - macOS: `start.command`. Beim ersten Mal *Rechtsklick → Öffnen*, weil die Datei aus dem Internet stammt.
-   - Linux: `./start.sh` im Terminal
+   - macOS: `start.command`. The first time use *right-click → Open*, because the file comes from the internet.
+   - Linux: `./start.sh` in a terminal
 
-   Es öffnen sich ein Konsolenfenster, das kleine Statusfenster (wie beim Programm, siehe oben) und der Browser.
-   Unter Linux erscheint das Statusfenster nur, wenn `python3-tk` installiert ist, sonst bleibt nur die Konsole.
+   A console window, the small status window (as with the program, see above) and the browser open.
+   On Linux the status window only appears if `python3-tk` is installed, otherwise only the console is shown.
 
-**Beenden:** *Beenden* im Statusfenster, *Einstellungen → Programm → Dashboard beenden* oder `Strg+C` im
-Konsolenfenster.
+**Quit:** *Quit* in the status window, *Settings → Program → Quit dashboard*, or `Ctrl+C` in the console window.
 
-### Daten, Updates und Passwort (Programm und Python-Variante)
+### Data, updates and password (program and Python variant)
 
-**Deine Daten** liegen getrennt vom Programm im Benutzerprofil. Programm und Python-Variante benutzen
-denselben Ordner, du kannst also jederzeit wechseln:
+**Your data** is stored separately from the program in your user profile. The program and the Python variant use the
+same folder, so you can switch at any time:
 
-| System  | Datenordner |
+| System  | Data folder |
 |---------|-------------|
 | Windows | `%LOCALAPPDATA%\FinanzDashboard` |
 | macOS   | `~/Library/Application Support/FinanzDashboard` |
 | Linux   | `~/.local/share/finanz-dashboard` |
 
-Den Programm- bzw. Download-Ordner kannst du jederzeit löschen oder ersetzen, deine Daten bleiben erhalten.
-Lade trotzdem ab und zu unter *Einstellungen → Sicherung* eine Sicherung herunter.
-Mit der Umgebungsvariable `FD_DATA_DIR` lässt sich ein anderer Datenordner wählen, mit `FD_PORT` ein anderer Port.
+You can delete or replace the program / download folder at any time, your data is kept.
+Still, download a backup from time to time under *Settings → Backup*.
+Use the environment variable `FD_DATA_DIR` to choose a different data folder and `FD_PORT` for a different port.
 
-**Updates:** Das Dashboard prüft einmal täglich bei GitHub, ob es eine neue Version gibt. Ein Punkt am Zahnrad
-zeigt an, dass ein Update bereitliegt.
-- Installiert wird nur auf Klick unter *Einstellungen → Updates*. Das Dashboard lädt die neue Version in den
-  Datenordner, startet neu und prüft, ob sie läuft. Startet sie nicht, kehrt es automatisch zur bisherigen
-  Version zurück. Zusätzlich gibt es den Button *Vorherige Version wiederherstellen*.
-- Lädst du von Hand einen neueren Download herunter, wird automatisch dieser verwendet.
+**Updates:** Once a day the dashboard asks GitHub whether a new version exists. A dot on the gear icon shows that an
+update is available.
+- It is installed only when you click under *Settings → Updates*. The dashboard downloads the new version into the
+  data folder, restarts and checks that it runs. If it does not start, it automatically returns to the previous
+  version. There is also a *Restore previous version* button.
+- If you manually download a newer copy, that one is used automatically.
 
-**Passwort vergessen?** Ohne Befehl geht es auf zwei Wegen, deine Daten bleiben in jedem Fall erhalten:
-- Auf der Anmeldeseite *Passwort vergessen?* wählen und den **Wiederherstellungscode** eingeben
-  (siehe [Sicherheit](#sicherheit)).
-- Im **Statusfenster** auf *Passwort zurücksetzen …* klicken. Danach öffnet sich der Browser, und du legst ein
-  neues Passwort fest.
+**Forgot your password?** Two ways without any command; your data is kept either way:
+- On the sign-in page choose *Forgot password?* and enter the **recovery code** (see [Security](#security)).
+- Click *Reset password …* in the **status window**. The browser then opens and you set a new password.
 
-Notlösung im Terminal, im entpackten Ordner der Python-Variante:
-- macOS und Linux: `FD_DATA_DIR=<Datenordner> python3 app/server.py --reset-password`
-- Windows: zuerst `set FD_DATA_DIR=%LOCALAPPDATA%\FinanzDashboard`, danach `py app\server.py --reset-password`
+Fallback in a terminal, in the unzipped folder of the Python variant:
+- macOS and Linux: `FD_DATA_DIR=<data folder> python3 app/server.py --reset-password`
+- Windows: first `set FD_DATA_DIR=%LOCALAPPDATA%\FinanzDashboard`, then `py app\server.py --reset-password`
 
 ## Docker (NAS, Raspberry Pi)
 
-Fertiges Image für amd64 und arm64 (Raspberry Pi 4/5, die meisten NAS): `ghcr.io/kevegl/finance-dashboard`.
-Lade [`docker-compose.yml`](docker-compose.yml) herunter und starte es:
+Ready-made image for amd64 and arm64 (Raspberry Pi 4/5, most NAS): `ghcr.io/kevegl/finance-dashboard`.
+Download [`docker-compose.yml`](docker-compose.yml) and start it:
 
 ```bash
 docker compose up -d
 ```
 
-Danach ist das Dashboard unter `http://<Adresse-des-Geräts>:8080` erreichbar. Auf einem Synology-NAS geht das
-auch über *Container Manager → Projekt → Erstellen* mit dieser Datei. Die Daten liegen im Volume `fd-data`.
-Für die Ersteinrichtung braucht es den **Einrichtungscode** aus dem Protokoll des Containers:
-`docker logs finance-dashboard` (Zeile «Einrichtungscode für die Ersteinrichtung: XXXX-XXXX»).
+The dashboard is then available at `http://<address-of-the-device>:8080`. On a Synology NAS you can also use
+*Container Manager → Project → Create* with this file. Data lives in the volume `fd-data`.
+For the initial setup you need the **setup code** from the container log:
+`docker logs finance-dashboard` (line «Einrichtungscode für die Ersteinrichtung: XXXX-XXXX», the server log is in German).
 
-**Updates:** Das Dashboard zeigt unter *Einstellungen → Updates* an, wenn es eine neue Version gibt. Installiert
-wird mit:
+**Updates:** *Settings → Updates* shows when a new version exists. Install it with:
 
 ```bash
 docker compose pull && docker compose up -d
 ```
 
-Alternativ automatisch mit [Watchtower](https://containrrr.dev/watchtower/).
+Or automatically with [Watchtower](https://containrrr.dev/watchtower/).
 
-Docker läuft ohne HTTPS. Mach es deshalb nur im Heimnetz oder per VPN erreichbar und richte keine
-Portweiterleitung im Router ein. Passwort vergessen: auf der Anmeldeseite mit dem Wiederherstellungscode
-(siehe [Sicherheit](#sicherheit)) oder, ohne Code, mit:
+Docker runs without HTTPS. Make it reachable only in your home network or through a VPN and do not set up port
+forwarding on your router. Forgot your password: on the sign-in page with the recovery code (see
+[Security](#security)) or, without a code, with:
 
 ```bash
 docker exec finance-dashboard python3 server.py --reset-password
 ```
 
-## Installation auf Proxmox (LXC)
+## Installation on Proxmox (LXC)
 
-1. **Container anlegen** (auf dem Proxmox-Host, Debian-12-Template):
+1. **Create the container** (on the Proxmox host, Debian 12 template):
    ```bash
    pveam update && pveam download local debian-12-standard_12.7-1_amd64.tar.zst
-   ID=120   # freie Container-ID auf deinem Proxmox-Host
+   ID=120   # a free container ID on your Proxmox host
    pct create $ID local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
      --hostname finance --cores 1 --memory 512 --rootfs local-lvm:4 \
      --net0 name=eth0,bridge=vmbr0,ip=dhcp --unprivileged 1 --features nesting=1 --start 1
    ```
-   (ID, Storage und Template-Version an dein System anpassen – `pveam available | grep debian` zeigt die aktuelle Version.)
+   (Adjust ID, storage and template version to your system – `pveam available | grep debian` shows the current version.)
 
-2. **Code holen** und installieren (im Container):
+2. **Fetch the code** and install (inside the container):
    ```bash
    pct enter $ID
    apt update && apt install -y git
@@ -194,53 +194,63 @@ docker exec finance-dashboard python3 server.py --reset-password
    cd /root/finance-dashboard && bash install.sh
    ```
 
-3. Im Browser öffnen: `https://<IP-des-Containers>:8080` (Zertifikatswarnung einmalig bestätigen)
+3. Open in your browser: `https://<container-IP>:8080` (confirm the certificate warning once)
 
-### Einstellungen
-In `/etc/finance-dashboard.env`, danach `systemctl restart finance-dashboard`:
+### Settings
+In `/etc/finance-dashboard.env`, then `systemctl restart finance-dashboard`:
 
-| Variable | Bedeutung | Standard |
+| Variable | Meaning | Default |
 |---|---|---|
 | `FD_PORT` | Port | `8080` |
-| `FD_BASE_CCY` | Start-Basiswährung (danach in den Einstellungen änderbar) | `CHF` |
-| `FD_PRICE_TTL` | Kurs-Aktualisierung in Sekunden | `14400` |
+| `FD_BASE_CCY` | Initial base currency (can be changed later in the settings) | `CHF` |
+| `FD_PRICE_TTL` | Price refresh interval in seconds | `14400` |
 
-**Sicherheit:** `install.sh` aktiviert automatisch **HTTPS** (selbstsigniertes Zertifikat). Beim **ersten Aufruf** legst du im Browser Benutzername und Passwort fest; dafür braucht es den **Einrichtungscode**, den `install.sh` am Ende anzeigt (auch in `/var/lib/finance-dashboard/setup-code.txt` und `journalctl -u finance-dashboard`) (gespeichert als PBKDF2-Hash, Anmeldung per sicherem Sitzungs-Cookie, 30 Tage gültig). Passwort ändern, andere Geräte abmelden und CSV-Export findest du unter **Einstellungen** (Zahnrad oben rechts). Nach 5 falschen Passwörtern wird die IP 15 Minuten gesperrt.
-Passwort vergessen: auf der Anmeldeseite mit dem Wiederherstellungscode. Ohne Code im Container
-`cd /opt/finance-dashboard/app && FD_DATA_DIR=/var/lib/finance-dashboard python3 server.py --reset-password`, danach
-erscheint wieder die Ersteinrichtung. Weitere Schutzmassnahmen stehen unter [Sicherheit](#sicherheit).
-Von aussen nur über VPN (WireGuard/Tailscale) erreichbar machen, keine Portweiterleitung im Router.
+**Security:** `install.sh` automatically enables **HTTPS** (self-signed certificate). On the **first visit** you
+choose a username and password in the browser; this requires the **setup code** that `install.sh` prints at the end
+(also in `/var/lib/finance-dashboard/setup-code.txt` and `journalctl -u finance-dashboard`). The password is stored
+as a PBKDF2 hash, sign-in uses a secure session cookie valid for 30 days. Changing the password, signing out other
+devices and CSV export are under **Settings** (gear at the top right). After 5 wrong passwords the IP is blocked for
+15 minutes.
+Forgot your password: on the sign-in page with the recovery code. Without a code, in the container run
+`cd /opt/finance-dashboard/app && FD_DATA_DIR=/var/lib/finance-dashboard python3 server.py --reset-password`;
+the initial setup then appears again. Further protections are described under [Security](#security).
+Make it reachable from outside only through a VPN (WireGuard/Tailscale), no port forwarding on your router.
 
-**Sicherung:** Unter *Einstellungen → Sicherung & Wiederherstellung* lädst du eine JSON-Datei mit allen Portfolios, Transaktionen, Ticker-Einstellungen und der Kurshistorie herunter (ohne Passwort). Nach einer Neuinstallation: Zugang einrichten → Sicherung wiederherstellen. Zusätzlich empfohlen: den Container in den Proxmox-Backup-Job aufnehmen.
+**Backup:** Under *Settings → Backup & restore* you download a JSON file with all portfolios, transactions, ticker
+settings and the price history (without the password). After a reinstall: set up your login → restore the backup.
+Also recommended: include the container in your Proxmox backup job.
 
-**Mehrere Portfolios:** Über die Tabs oben im Dashboard (+ = neues Portfolio, Doppelklick = umbenennen). Jedes Portfolio hat eigene Transaktionen und Importe; verwalten/löschen unter *Einstellungen → Portfolios*.
+**Multiple portfolios:** Use the tabs at the top of the dashboard (+ = new portfolio, double-click = rename). Each
+portfolio has its own transactions and imports; manage/delete them under *Settings → Portfolios*.
 
-**Update:** am einfachsten im Dashboard unter *Einstellungen → Updates* (siehe unten). Alternativ im Container: `cd /root/finance-dashboard && git pull && bash install.sh` (Daten und Einstellungen bleiben erhalten – sie liegen ausserhalb des Repos in `/var/lib/finance-dashboard` und `/etc/finance-dashboard.env`).
+**Update:** easiest in the dashboard under *Settings → Updates* (see below). Alternatively in the container:
+`cd /root/finance-dashboard && git pull && bash install.sh` (data and settings are kept – they live outside the repo
+in `/var/lib/finance-dashboard` and `/etc/finance-dashboard.env`).
 
-## Updates im Dashboard (Proxmox)
+## Updates in the dashboard (Proxmox)
 
-Wurde das Dashboard per `git clone` installiert, richtet `install.sh` zusätzlich einen kleinen Update-Dienst ein.
-Unter *Einstellungen → Updates* siehst du dann die installierte Version, ob es eine neue gibt (mit Änderungsliste)
-und kannst sie per Klick installieren. Ein Punkt am Zahnrad zeigt an, dass ein Update bereitliegt.
+If the dashboard was installed via `git clone`, `install.sh` also sets up a small update service. Under
+*Settings → Updates* you then see the installed version and whether a new one exists (with a change list), and can
+install it with one click. A dot on the gear icon shows that an update is available.
 
-- **Tägliche Prüfung:** Ein systemd-Timer prüft einmal am Tag, ob es eine neue Version gibt. Installiert wird nur auf Klick.
-- **Kanal** (`FD_UPDATE_CHANNEL` in `/etc/finance-dashboard.env`): Mit `release` gibt es nur veröffentlichte
-  Versionen (Git-Tags `v1.2.3`). Das ist der Standard bei Neuinstallationen. Mit `main` ist jeder neue Commit ein
-  Update. Ohne Eintrag gilt `main`, so verhalten sich bestehende Installationen wie bisher.
-- **Sicherheit:** Das Dashboard läuft als eingeschränkter Benutzer und schreibt beim Klick nur eine Auftragsdatei.
-  Ausgeführt wird sie vom root-Dienst `finance-dashboard-update`, der ausschliesslich `check`, `update` und `rollback`
-  akzeptiert, nur Fast-Forward-Updates aus dem eigenen Repository holt und lokale Änderungen nie überschreibt.
-- **Signaturprüfung (empfohlen):** Weil `install.sh` beim Update als root läuft, könnte ein fremder Push auf GitHub
-  (gestohlenes Konto oder Token) Code im Container ausführen. Mit einer Liste erlaubter Schlüssel installiert der
-  Dienst nur Versionen, die mit deinem eigenen SSH-Schlüssel signiert sind – siehe [Signierte Updates](#signierte-updates).
-- **Automatischer Rollback:** Antwortet das Dashboard nach dem Update nicht, wird die vorherige Version wiederhergestellt.
-  Zusätzlich gibt es den Button *Vorherige Version wiederherstellen*.
-- Im Container von Hand: `finance-dashboard-update check | update | rollback`, Status in
-  `/var/lib/finance-dashboard-update/status.json`, Timer: `systemctl list-timers finance-dashboard-update-check.timer`.
+- **Daily check:** A systemd timer checks once a day whether a new version exists. Installation only happens on click.
+- **Channel** (`FD_UPDATE_CHANNEL` in `/etc/finance-dashboard.env`): `release` offers only published versions (git
+  tags `v1.2.3`). This is the default for new installations. With `main` every new commit is an update. Without an
+  entry `main` applies, so existing installations behave as before.
+- **Security:** The dashboard runs as a restricted user and only writes a job file when you click. The job is executed
+  by the root service `finance-dashboard-update`, which accepts only `check`, `update` and `rollback`, only fetches
+  fast-forward updates from its own repository and never overwrites local changes.
+- **Signature check (recommended):** Because `install.sh` runs as root during an update, a foreign push to GitHub
+  (stolen account or token) could execute code in the container. With a list of allowed keys the service installs
+  only versions signed with your own SSH key – see [Signed updates](#signed-updates).
+- **Automatic rollback:** If the dashboard does not respond after the update, the previous version is restored.
+  There is also a *Restore previous version* button.
+- By hand in the container: `finance-dashboard-update check | update | rollback`, status in
+  `/var/lib/finance-dashboard-update/status.json`, timer: `systemctl list-timers finance-dashboard-update-check.timer`.
 
-### Signierte Updates
+### Signed updates
 
-Einmalig auf deinem eigenen Computer einen Signaturschlüssel anlegen und Git sagen, dass er Tags damit signiert:
+Once, on your own computer, create a signing key and tell Git to sign tags with it:
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/finance_release -C "finance-dashboard release"
@@ -250,239 +260,237 @@ ssh-keygen -t ed25519 -f ~/.ssh/finance_release -C "finance-dashboard release"
 git config --global gpg.format ssh && git config --global user.signingkey ~/.ssh/finance_release.pub
 ```
 
-Im Container die Datei `/etc/finance-dashboard/allowed_signers` anlegen (eine Zeile pro erlaubtem Schlüssel, Inhalt
-von `~/.ssh/finance_release.pub` einsetzen) und den Kanal auf `release` stellen:
+In the container create the file `/etc/finance-dashboard/allowed_signers` (one line per allowed key, insert the
+content of `~/.ssh/finance_release.pub`) and set the channel to `release`:
 
 ```bash
-echo 'release namespaces="git" ssh-ed25519 AAAA…dein-öffentlicher-Schlüssel…' > /etc/finance-dashboard/allowed_signers
+echo 'release namespaces="git" ssh-ed25519 AAAA…your-public-key…' > /etc/finance-dashboard/allowed_signers
 ```
 
 ```bash
 sed -i 's/^FD_UPDATE_CHANNEL=.*/FD_UPDATE_CHANNEL=release/' /etc/finance-dashboard.env && grep -q '^FD_UPDATE_CHANNEL=' /etc/finance-dashboard.env || echo 'FD_UPDATE_CHANNEL=release' >> /etc/finance-dashboard.env
 ```
 
-Ab dann installiert der Update-Dienst nur noch Releases, deren Tag mit diesem Schlüssel signiert ist
-(`git tag -s v1.2.3 -m "…"`, siehe [Neue Version veröffentlichen](#neue-version-veröffentlichen)). Ein unsigniertes
-Release zeigt *Einstellungen → Updates* als «Nicht installierbar» an. Auf dem Kanal `main` muss entsprechend der
-neueste Commit signiert sein. Ohne die Datei bleibt die Prüfung aus (bisheriges Verhalten). Anderer Pfad:
-`FD_UPDATE_SIGNERS=/pfad/zur/datei` in `/etc/finance-dashboard.env`.
+From then on the update service installs only releases whose tag is signed with this key
+(`git tag -s v1.2.3 -m "…"`, see [Publishing a new version](#publishing-a-new-version)). *Settings → Updates* shows
+an unsigned release as «Cannot be installed». On the `main` channel the latest commit must be signed accordingly.
+Without the file the check stays off (previous behaviour). Different path:
+`FD_UPDATE_SIGNERS=/path/to/file` in `/etc/finance-dashboard.env`.
 
-Hinweis: Die Prüfung betrifft die Proxmox-Installation mit Update-Dienst. Programm, Python-Variante und Docker laden
-Releases über HTTPS direkt von GitHub.
+Note: The check applies to the Proxmox installation with the update service. The program, the Python variant and
+Docker download releases directly from GitHub over HTTPS.
 
-**Privates Repository** (nur bei einem eigenen, privaten Fork): Der Container braucht einen Lesezugriff, am besten einen Deploy Key:
+**Private repository** (only for your own private fork): the container needs read access, ideally a deploy key:
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/finance_deploy -N "" -C "finance-lxc"
 printf 'Host github.com\n  IdentityFile ~/.ssh/finance_deploy\n  IdentitiesOnly yes\n' >> ~/.ssh/config
-cat ~/.ssh/finance_deploy.pub   # auf GitHub: Repo → Settings → Deploy keys → Add (ohne Schreibzugriff)
+cat ~/.ssh/finance_deploy.pub   # on GitHub: Repo → Settings → Deploy keys → Add (without write access)
 git clone git@github.com:Kevegl/finance-dashboard.git /root/finance-dashboard
 ```
 
-## CSV exportieren
+## Exporting CSV
 
-**Relai:** App → *Transaktionen* → Pfeil oben rechts → Zeitraum wählen → Format *CSV*.
-Käufe und Verkäufe werden übernommen; Auszahlungen in die eigene Wallet werden übersprungen (der BTC gehört dir ja weiterhin).
+**Relai:** app → *Transactions* → arrow at the top right → choose period → format *CSV*.
+Buys and sells are imported; withdrawals to your own wallet are skipped (the BTC is still yours).
 
-**Interactive Brokers** – zwei Varianten, beide werden automatisch erkannt:
-- *Activity Statement*: Client Portal → Performance & Berichte → Kontoauszüge → *Aktivität* → Zeitraum wählen → Format **CSV**. Enthält auch Dividenden und die Börse (für automatische Kurs-Ticker).
-- *Flex Query*: Performance & Berichte → Flex Queries → Aktivität-Flex-Query mit Sektion *Trades* (Felder u.a. Symbol, TradeDate, Quantity, TradePrice, CurrencyPrimary, IBCommission, Buy/Sell, ListingExchange) → Format CSV.
+**Interactive Brokers** – two variants, both detected automatically:
+- *Activity Statement*: Client Portal → Performance & Reports → Statements → *Activity* → choose period → format
+  **CSV**. Also contains dividends and the exchange (for automatic price tickers).
+- *Flex Query*: Performance & Reports → Flex Queries → Activity Flex Query with the section *Trades* (fields incl.
+  Symbol, TradeDate, Quantity, TradePrice, CurrencyPrimary, IBCommission, Buy/Sell, ListingExchange) → format CSV.
 
-Tipp: Bei IBKR das Statement für ein ganzes Jahr bzw. seit Kontoeröffnung exportieren. Devisentausch-Trades (z.B. CHF→USD) werden übersprungen.
+Tip: at IBKR export the statement for a whole year or since account opening. Currency-exchange trades (e.g. CHF→USD)
+are skipped.
 
-**Andere Anbieter** (Swissquote, PostFinance, Yuh, …): Im Import-Dialog *Anderer Anbieter* wählen und die Spalten (Datum, Asset, Menge, Kurs, Betrag …) zuordnen.
+**Other providers** (Swissquote, PostFinance, Yuh, …): in the import dialog choose *Other provider* and map the
+columns (date, asset, quantity, price, amount …).
 
-## Kurse & Ticker
-Beim Import wird der Yahoo-Ticker automatisch gesetzt, wenn möglich (BTC → `BTC-CHF`, IBKR mit Börse LSE → `VWRA.L`, SIX → `CHSPI.SW` …).
-Fehlt ein Ticker, wird mit dem letzten Kaufkurs bewertet – ein Hinweis erscheint oben. Klick auf die Position, um den Ticker zu setzen oder einen manuellen Kurs einzutragen.
-Endungen: `.SW` SIX, `.L` London, `.DE` Xetra, `.AS` Amsterdam, `.PA` Paris, ohne Endung = USA.
+## Prices & tickers
+On import the Yahoo ticker is set automatically where possible (BTC → `BTC-CHF`, IBKR with exchange LSE →
+`VWRA.L`, SIX → `CHSPI.SW` …). If a ticker is missing, the position is valued at the last purchase price – a notice
+appears at the top. Click the position to set the ticker or enter a manual price.
+Suffixes: `.SW` SIX, `.L` London, `.DE` Xetra, `.AS` Amsterdam, `.PA` Paris, no suffix = USA.
 
-Der Container braucht dafür Internetzugang zu `query1.finance.yahoo.com`.
+The server needs internet access to `query1.finance.yahoo.com` for this.
 
-## Säule 3a: Finpension und VIAC
+## Pillar 3a: Finpension and VIAC
 
-- **Finpension:** Transaktionsreport als CSV exportieren und importieren (wird automatisch erkannt).
-- **VIAC:** bietet keinen CSV-Export – stattdessen die PDF-Belege importieren (mehrere PDFs auf einmal oder als ZIP).
-  Erkannt werden Börsenabrechnungen (Kauf/Verkauf), Ausschüttungen, Zinsen und Verwaltungsgebühren.
-- Ein-/Auszahlungen und Transfers zwischen Stiftungen sind reine Geldbewegungen und werden übersprungen.
-- Zinsen und Kontogebühren laufen über die Position „CASH“ und fliessen in „Erträge netto“ ein.
-- Die Fonds haben meist keinen Yahoo-Kurs – bewertet wird mit dem letzten Kauf-/Verkaufskurs (bei monatlichen
-  Käufen recht aktuell) oder einem manuellen Kurs (Position anklicken).
-- Der PDF-Import braucht `pdftotext` (Paket `poppler-utils`, wird von install.sh installiert).
+- **Finpension:** export the transaction report as CSV and import it (detected automatically).
+- **VIAC:** offers no CSV export – import the PDF statements instead (several PDFs at once or as a ZIP).
+  Recognised are trade confirmations (buy/sell), distributions, interest and management fees.
+- Deposits/withdrawals and transfers between foundations are pure cash movements and are skipped.
+- Interest and account fees go through the position “CASH” and flow into “Net income”.
+- The funds usually have no Yahoo price – they are valued at the last buy/sell price (quite current with monthly
+  purchases) or a manual price (click the position).
+- PDF import needs `pdftotext` (package `poppler-utils`, installed by install.sh).
 
-## Spartipps & Vorsorge
+## Savings tips & retirement
 
-Über das Glühbirnen-Symbol oben (oder `#/vorsorge`) öffnet sich eine eigene Ansicht:
+The light bulb icon at the top (or `#/vorsorge`) opens a dedicated view:
 
-- **Als Nächstes:** kommende Fristen nach Datum (Krankenkasse 30.11., 3a/PK-Einkauf bis Jahresende,
-  Steuererklärung …) und wie viel du dieses Jahr noch in die Säule 3a einzahlen kannst – gezählt werden die
-  Einzahlungen in deinen 3a-Portfolios.
-- **Steuern sparen:** Schätzung von Einkommenssteuer, Grenzsteuersatz und Ersparnis durch 3a-Einzahlung,
-  3a-Nachzahlung und PK-Einkauf (einmalig vs. gestaffelt). Den Grenzsteuersatz aus der eigenen Steuerrechnung kannst du
-  direkt eintragen.
-- **Gemeindesteuerfüsse:** Für den Kanton Zürich holt der Server die aktuellen Steuerfüsse automatisch (höchstens
-  einmal täglich) aus den offenen Daten des Statistischen Amts (`www.web.statistik.zh.ch`, Datensatz «Steuerfüsse der
-  Zürcher Gemeinden» auf opendata.swiss). Neue Jahre erscheinen, sobald der Kanton sie publiziert; im Profil lässt sich
-  der Abruf auslösen oder abschalten. Alternativ die CSV manuell hochladen (das Jahr wird aus dem Dateinamen gelesen,
-  hochgeladene Tabellen werden vom Abruf nicht überschrieben). Danach Wohngemeinde und
-  Konfession wählen; Gemeinden mit mehreren Steuerfüssen (Schul-/Kirchgemeinden) bieten eine Variantenauswahl.
-  Zusätzlich gibt es einen Vergleich mit den günstigsten und teuersten Gemeinden.
-- **Mehrere 3a-Konten:** z.B. eigenes und Partner-Konto einzeln anzeigen oder vergleichen; pro Konto lassen sich
-  PK-Anschluss, Erwerbseinkommen und steuerbares Einkommen festlegen.
-- **FIRE & Pensionierung:** FIRE-Zahl, frühestes Ausstiegsalter, Brücke bis 65 inkl. AHV-Beiträgen als
-  Nichterwerbstätige und Rentenlücke. Das Vermögen wird aus den Portfolios übernommen (überschreibbar).
-- **Tipps & Tricks:** rund 45 Tipps zu Steuern, Vorsorge, Anlegen, Alltag, FIRE, Pensionierung und anstehenden
-  Gesetzesänderungen – mit persönlichen Zahlen aus dem Profil und zum Abhaken.
+- **Up next:** upcoming deadlines by date (health insurance 30 Nov, 3a / pension-fund buy-in until year end, tax
+  return …) and how much you can still pay into pillar 3a this year – the payments in your 3a portfolios are counted.
+- **Save taxes:** estimate of income tax, marginal rate and savings from a 3a payment, a 3a catch-up payment and a
+  pension-fund buy-in (one-off vs. staggered). You can enter the marginal rate from your own tax bill directly.
+- **Municipal tax rates:** for the canton of Zurich the server fetches the current rates automatically (at most once a
+  day) from the open data of the Statistical Office (`www.web.statistik.zh.ch`, dataset «Steuerfüsse der Zürcher
+  Gemeinden» on opendata.swiss). New years appear as soon as the canton publishes them; in the profile the fetch can
+  be triggered or switched off. Alternatively upload the CSV manually (the year is read from the file name; uploaded
+  tables are not overwritten by the fetch). Then choose your municipality and denomination; municipalities with
+  several rates (school/church municipalities) offer a choice of variants. There is also a comparison with the
+  cheapest and most expensive municipalities.
+- **Multiple 3a accounts:** e.g. show or compare your own and your partner's account separately; per account you can
+  set pension-fund affiliation, earned income and taxable income.
+- **FIRE & retirement:** FIRE number, earliest exit age, bridge to 65 including AHV contributions as a non-employed
+  person, and pension gap. Wealth is taken from your portfolios (can be overridden).
+- **Tips & tricks:** about 45 tips on taxes, retirement provision, investing, everyday life, FIRE, retirement and
+  upcoming law changes – with personal figures from your profile and tick-off boxes.
 
-**Jahreswechsel:** 3a-Einzahlungen und Fristen beziehen sich immer auf das laufende Jahr. Jährliche Tipps
-(3a, Krankenkasse, Abzüge …) sind am 1. Januar wieder offen, einmalige bleiben erledigt; befristete Tipps verschwinden
-nach ihrem Gültigkeitsjahr. Amtliche Jahreswerte (AHV-Maximalrente, 3a-Maximum, Bundestarif) stehen in
-`YEAR_VALUES`/`FED_BY_YEAR` in `app/static/plan.js` und kommen per Update. Fehlen sie für ein neues Jahr, gelten die
-Werte des Vorjahres mit einem Hinweis – dort lässt sich die neue AHV-Maximalrente eintragen, die 3a-Maximalbeträge
-(24 % bzw. 120 % der jährlichen Maximalrente) werden daraus berechnet.
+**New year:** 3a payments and deadlines always refer to the current year. Annual tips (3a, health insurance,
+deductions …) reopen on 1 January, one-off ones stay done; time-limited tips disappear after their year of validity.
+Official yearly values (maximum AHV pension, 3a maximum, federal tariff) are in `YEAR_VALUES`/`FED_BY_YEAR` in
+`app/static/plan.js` and arrive via updates. If they are missing for a new year, the previous year's values apply with
+a notice – there you can enter the new maximum AHV pension; the 3a maximum amounts (24 % and 120 % of the annual
+maximum pension) are calculated from it.
 
-Das Profil wird auf dem Server gespeichert (in der Datenbank, also auch in der Sicherung). Alle Tarife sind
-Näherungen (Bundessteuer nach amtlichem Tarif 2026, Staatssteuer vereinfacht) und ersetzen keine Beratung. Weitere Kantone lassen sich in `app/static/plan.js`
-(`CANTONS`, `DEADLINES`, `TIPS` mit `canton`) ergänzen.
+The profile is stored on the server (in the database, so it is part of the backup). All tariffs are approximations
+(federal tax per the official 2026 tariff, cantonal tax simplified) and are not advice. Further cantons can be added
+in `app/static/plan.js` (`CANTONS`, `DEADLINES`, `TIPS` with `canton`).
 
-## Sprache & News-Ticker
+## Language & news ticker
 
-- **Sprache:** Deutsch oder Englisch unter *Einstellungen → Allgemein*. Gilt für das ganze Dashboard und die News.
-- **News-Ticker:** Laufschrift über den Portfolio-Tabs mit aktuellen Schlagzeilen (Google News, letzte 14 Tage) zu den
-  gehaltenen Positionen des geöffneten Portfolios. Der Server holt die Meldungen und speichert sie 30 Minuten zwischen;
-  der Browser verbindet sich nicht direkt mit Google. Abschaltbar in den Einstellungen.
-- Suchbegriff pro Position anpassbar: Position anklicken → *News-Suchbegriff* (leer = Name der Position).
-- **Säule 3a:** Vorsorgefonds stehen nie in Schlagzeilen. In 3a-Portfolios ordnet der Ticker die Fonds deshalb ihrem
-  Markt zu (z. B. SMI, Weltbörsen, Wall Street, Schwellenländer, Immobilien Schweiz, SNB-Zinsen, Gold) und zeigt
-  zusätzlich Meldungen zum Anbieter (VIAC, Finpension) und zur Säule 3a allgemein. Ein eigener News-Suchbegriff
-  einer Position hat Vorrang.
+- **Language:** German or English under *Settings → General*. Applies to the whole dashboard and the news.
+- **News ticker:** a scrolling line above the portfolio tabs with current headlines (Google News, last 14 days) about
+  the positions held in the open portfolio. The server fetches the items and caches them for 30 minutes; the browser
+  never connects to Google directly. Can be switched off in the settings.
+- The search term can be customised per position: click the position → *News search term* (empty = name of the
+  position).
+- **Pillar 3a:** pension funds never make headlines. In 3a portfolios the ticker therefore maps the funds to their
+  market (e.g. SMI, world markets, Wall Street, emerging markets, Swiss real estate, SNB interest rates, gold) and
+  additionally shows news about the provider (VIAC, Finpension) and pillar 3a in general. A position's own news search
+  term takes precedence.
 
-## Probleme & Wünsche
+## Problems & wishes
 
-**Etwas funktioniert nicht?** Eröffne ein [Issue auf GitHub](https://github.com/Kevegl/finance-dashboard/issues/new)
-und beschreibe kurz:
-- welche Variante du nutzt (Programm für Windows/Mac, Python-Variante, Docker oder Proxmox) und die Version
-  (*Einstellungen → Updates*),
-- was du gemacht hast, was passiert ist und was du erwartet hättest,
-- die Fehlermeldung bzw. einen Screenshot.
+**Something does not work?** Open an [issue on GitHub](https://github.com/Kevegl/finance-dashboard/issues/new) and
+briefly describe:
+- which variant you use (program for Windows/Mac, Python variant, Docker or Proxmox) and the version
+  (*Settings → Updates*),
+- what you did, what happened and what you expected,
+- the error message or a screenshot.
 
-> **Bitte keine echten Finanzdaten anhängen**: keine eigenen CSV/PDF-Exporte, Sicherungen, Kontonummern oder
-> Screenshots mit echten Beträgen. Issues sind öffentlich. Ersetze Werte durch erfundene oder schwärze sie.
-> Bei einem Importproblem helfen zwei, drei Zeilen der Datei mit geänderten Zahlen.
+> **Please do not attach real financial data**: no own CSV/PDF exports, backups, account numbers or screenshots with
+> real amounts. Issues are public. Replace values with made-up ones or black them out.
+> For an import problem, two or three lines of the file with changed numbers are enough.
 
-**Geplant:** Weitere Funktionen folgen, z.B. Importe von weiteren Brokern und 3a-Anbietern. Wünsche dafür
-ebenfalls gern als Issue, am besten mit einer Beispieldatei mit erfundenen Werten.
+**Planned:** more features, e.g. imports from further brokers and 3a providers. Wishes are welcome as an issue, ideally
+with a sample file containing made-up values.
 
-## Entwicklung & Tests
+## Development & tests
 
 ```bash
-cd app && python3 server.py      # Server-Modus, http://localhost:8080, Daten in data/
-python3 app/launcher.py          # lokaler Betrieb wie beim Doppelklick, http://127.0.0.1:8765
-python3 tests/smoke_server.py    # Kurztest Server-Modus inkl. Import aller Beispiel-CSVs
-python3 tests/calc_unit.py       # Unit-Tests: Zahlen, Daten, Berechnung, Login-Sperre, Einrichtungscode
-python3 tests/update_verify.py   # Signaturprüfung des Update-Dienstes (git + ssh-keygen)
-python3 tests/smoke_local.py     # Kurztest lokaler Betrieb (Start, Anmeldung, zweite Instanz, Beenden)
+cd app && python3 server.py      # server mode, http://localhost:8080, data in data/
+python3 app/launcher.py          # local mode as with a double-click, http://127.0.0.1:8765
+python3 tests/smoke_server.py    # quick test of server mode incl. import of all sample CSVs
+python3 tests/calc_unit.py       # unit tests: numbers, dates, calculation, login lockout, setup code
+python3 tests/update_verify.py   # signature check of the update service (git + ssh-keygen)
+python3 tests/smoke_local.py     # quick test of local mode (start, sign-in, second instance, quit)
 ```
 
-Im Ordner `beispiel-csv/` liegen Testdateien für alle Formate (erfundene Werte).
+The folder `beispiel-csv/` contains test files for all formats (made-up values).
 
-**Aufbau des Servers** (`app/`, nur Python-Standardbibliothek):
+**Server structure** (`app/`, Python standard library only):
 
-| Datei | Inhalt |
+| File | Contents |
 |---|---|
-| `server.py` | HTTP: Routing-Tabellen `GET_ROUTES`/`POST_ROUTES`, Anmeldeschutz, Start |
-| `config.py` | Umgebungsvariablen und Konstanten; `config.BASE` = aktuelle Basiswährung |
-| `store.py` | SQLite: `db_tx()` (Transaktion, schliesst die Verbindung), Schema/Migrationen, Einstellungen, Sicherung |
-| `validate.py` | Prüfung von Datum, Zahlen und Typ einer Transaktion |
-| `auth.py` | Passwort-Hash, Sitzungen, Zwei-Faktor, Wiederherstellungscode, Anmeldeprotokoll |
-| `portfolio.py` | Berechnung: Bestände, Kostenbasis, Erträge, Historie |
-| `prices.py`, `news.py`, `muni.py` | Kurse/Wechselkurse, News-Ticker, Gemeindesteuerfüsse (externe Abfragen) |
-| `importers.py`, `uploads.py` | CSV-Formate der Anbieter, PDF-/ZIP-Upload |
-| `updates.py`, `local_update.py`, `launcher.py` | Updates (root-Dienst, Releases), lokaler Betrieb |
+| `server.py` | HTTP: routing tables `GET_ROUTES`/`POST_ROUTES`, login protection, startup |
+| `config.py` | Environment variables and constants; `config.BASE` = current base currency |
+| `store.py` | SQLite: `db_tx()` (transaction, closes the connection), schema/migrations, settings, backup |
+| `validate.py` | Validation of date, numbers and type of a transaction |
+| `auth.py` | Password hash, sessions, two-factor, recovery code, sign-in log |
+| `portfolio.py` | Calculation: holdings, cost basis, income, history |
+| `prices.py`, `news.py`, `muni.py` | Prices/exchange rates, news ticker, municipal tax rates (external requests) |
+| `importers.py`, `uploads.py` | Provider CSV formats, PDF/ZIP upload |
+| `updates.py`, `local_update.py`, `launcher.py` | Updates (root service, releases), local mode |
 
-**Screenshots fürs README neu erstellen:** `python3 docs/screenshots/demo_data.py /tmp/fd-demo` legt ein
-Demo-Dashboard mit erfundenen Werten und Kursen an. Danach den Server damit starten
-(`FD_DATA_DIR=/tmp/fd-demo FD_PRICE_TTL=999999999 python3 app/server.py`) und
-`node docs/screenshots/shoot.js http://127.0.0.1:8080 docs/screenshots <Import-CSV>` ausführen (Playwright nötig).
-Für das Bild der Einstellungen den Server zusätzlich mit `FD_LOCAL=1` starten und `shoot.js` mit `local` aufrufen. GitHub Actions führt die
-Kurztests bei jedem Push auf Windows, macOS und Linux aus (`.github/workflows/tests.yml`), inklusive der
-Startskripte und des Docker-Images.
+**Regenerating the README screenshots:** `python3 docs/screenshots/demo_data.py /tmp/fd-demo` creates a demo
+dashboard with made-up values and prices. Then start the server with it
+(`FD_DATA_DIR=/tmp/fd-demo FD_PRICE_TTL=999999999 python3 app/server.py`) and run
+`node docs/screenshots/shoot.js http://127.0.0.1:8080 docs/screenshots <import-CSV>` (Playwright required).
+For the settings image also start the server with `FD_LOCAL=1` and call `shoot.js` with `local`. GitHub Actions runs
+the quick tests on every push on Windows, macOS and Linux (`.github/workflows/tests.yml`), including the start
+scripts and the Docker image.
 
-### Neue Version veröffentlichen
+### Publishing a new version
 
-1. Die Versionsnummer in `app/VERSION` erhöhen, z.B. auf `1.1.0`, committen und pushen.
-2. Auf GitHub unter *Releases → Draft a new release* den Tag `v1.1.0` anlegen (muss zu `app/VERSION` passen),
-   Änderungen kurz beschreiben und auf *Publish release* klicken.
-   Alternativ im Terminal: `git tag -a v1.1.0 -m "Änderungen …" && git push origin v1.1.0`. Die Tag-Nachricht
-   wird zu den Release-Notizen, das Release legt der Workflow selbst an. Mit [signierten Updates](#signierte-updates)
-   den Tag mit `git tag -s` statt `-a` auf dem eigenen Computer anlegen – ein unsigniertes Release installiert der
-   Update-Dienst dann nicht.
-3. Der Workflow `.github/workflows/release.yml` baut dann automatisch:
-   - das Docker-Image `ghcr.io/kevegl/finance-dashboard:1.1.0` bzw. `:latest`,
-   - die Windows-`.exe` und die Mac-App, testet beide und hängt sie ans Release.
+1. Raise the version number in `app/VERSION`, e.g. to `1.1.0`, commit and push.
+2. On GitHub under *Releases → Draft a new release* create the tag `v1.1.0` (must match `app/VERSION`), briefly
+   describe the changes and click *Publish release*.
+   Alternatively in a terminal: `git tag -a v1.1.0 -m "Changes …" && git push origin v1.1.0`. The tag message becomes
+   the release notes; the workflow creates the release itself. With [signed updates](#signed-updates) create the tag
+   with `git tag -s` instead of `-a` on your own computer – an unsigned release will not be installed by the update
+   service.
+3. The workflow `.github/workflows/release.yml` then builds automatically:
+   - the Docker image `ghcr.io/kevegl/finance-dashboard:1.1.0` and `:latest`,
+   - the Windows `.exe` and the Mac app, tests both and attaches them to the release.
 
-   Beim allerersten Image muss das Paket einmal öffentlich geschaltet werden: GitHub → *Packages* →
-   `finance-dashboard` → *Package settings* → *Change visibility* → *Public*.
+   For the very first image the package must be made public once: GitHub → *Packages* → `finance-dashboard` →
+   *Package settings* → *Change visibility* → *Public*.
 
-Alle Installationen auf dem Kanal «Releases» (Programm, Python-Variante, Docker-Hinweis und neue
-Proxmox-Installationen) sehen die neue Version innerhalb eines Tages. Mit *Run workflow* lässt sich der
-Release-Workflow auch ohne Veröffentlichung testen. Die gebauten Dateien liegen dann als Artefakte beim Lauf.
+All installations on the «Releases» channel (program, Python variant, Docker notice and new Proxmox installations)
+see the new version within a day. With *Run workflow* the release workflow can also be tested without publishing.
+The built files are then available as artifacts of the run.
 
-## Sicherheit
+## Security
 
-**Anmeldung** (alle Varianten)
-- Benutzername und Passwort legst du beim ersten Aufruf fest. Das Passwort wird nur als PBKDF2-Hash gespeichert.
-  Nach 5 Fehlversuchen ist die Anmeldung von dieser Adresse aus 15 Minuten gesperrt, auch bei vielen
-  gleichzeitigen Anfragen.
-- **Einrichtungscode** (Server und Docker): Solange noch kein Passwort festgelegt ist, verlangt die Ersteinrichtung
-  einen einmaligen Code. So kann niemand im Netzwerk eine frische Installation vor dir übernehmen. Der Code steht in
-  der Ausgabe von `install.sh`, im Protokoll (`journalctl -u finance-dashboard` bzw. `docker logs`) und in
-  `setup-code.txt` im Datenordner. Nach der Einrichtung wird er gelöscht; nach `--reset-password` gibt es einen neuen.
-  Im lokalen Betrieb (Programm/`start.*`, nur auf diesem Computer erreichbar) braucht es keinen Code.
-- **Wiederherstellungscode:** Nach der Einrichtung zeigt das Dashboard einmalig einen Code wie
-  `K7Q2M-…` an. Bewahre ihn getrennt vom Passwort auf, z.B. im Passwortmanager oder ausgedruckt. Damit setzt du auf
-  der Anmeldeseite unter *Passwort vergessen?* ein neues Passwort, ganz ohne Befehle. Danach gibt es sofort einen
-  neuen Code. Bestehende Installationen erzeugen ihren Code unter *Einstellungen → Wiederherstellungscode*.
-- **Zwei-Faktor-Anmeldung (optional):** Unter *Einstellungen → Zwei-Faktor-Anmeldung* einschalten und den
-  QR-Code mit einer Authenticator-App scannen (z.B. Google Authenticator, Microsoft Authenticator, 1Password,
-  Bitwarden). Alternativ den Schlüssel von Hand eintippen. Auf dem Handy öffnet der Link *In Authenticator-App
-  öffnen* die App direkt. Danach
-  braucht die Anmeldung zusätzlich den 6-stelligen Code. Handy verloren? Der Wiederherstellungscode schaltet die
-  Zwei-Faktor-Anmeldung aus.
-- **Anmeldeprotokoll:** *Einstellungen → Sitzungen* zeigt die letzte Anmeldung, die Fehlversuche der letzten
-  30 Tage und ein Protokoll mit Zeit und Adresse. Auf dem Server stehen die Ereignisse zusätzlich im Systemprotokoll
-  (`journalctl -u finance-dashboard`).
-- Sitzungen laufen nach 30 Tagen ab. Unter *Einstellungen → Sitzungen* kannst du alle anderen Geräte abmelden.
-  Ein Passwortwechsel meldet sie automatisch ab.
+**Sign-in** (all variants)
+- You choose username and password on the first visit. The password is stored only as a PBKDF2 hash.
+  After 5 failed attempts sign-in from that address is blocked for 15 minutes, even with many simultaneous requests.
+- **Setup code** (server and Docker): as long as no password is set, the initial setup requires a one-time code. This
+  way nobody on the network can take over a fresh installation before you. The code is in the output of
+  `install.sh`, in the log (`journalctl -u finance-dashboard` or `docker logs`) and in `setup-code.txt` in the data
+  folder. It is deleted after setup; after `--reset-password` there is a new one. In local mode (program/`start.*`,
+  reachable only from this computer) no code is needed.
+- **Recovery code:** after setup the dashboard shows a code like `K7Q2M-…` once. Keep it separate from your password,
+  e.g. in a password manager or printed. With it you set a new password on the sign-in page under *Forgot password?*,
+  without any commands. A new code is issued immediately afterwards. Existing installations generate their code under
+  *Settings → Recovery code*.
+- **Two-factor sign-in (optional):** switch it on under *Settings → Two-factor sign-in* and scan the QR code with an
+  authenticator app (e.g. Google Authenticator, Microsoft Authenticator, 1Password, Bitwarden). Alternatively type
+  the key in by hand. On a phone the link *Open in authenticator app* opens the app directly. After that sign-in
+  additionally needs the 6-digit code. Lost your phone? The recovery code switches two-factor sign-in off.
+- **Sign-in log:** *Settings → Sessions* shows the last sign-in, the failed attempts of the last 30 days and a log
+  with time and address. On the server the events are also in the system log (`journalctl -u finance-dashboard`).
+- Sessions expire after 30 days. Under *Settings → Sessions* you can sign out all other devices. Changing the
+  password signs them out automatically.
 
-**Server-Installation (Proxmox/LXC)**
-- HTTPS mit automatisch erneuertem Zertifikat. Das Dashboard läuft als eigener Benutzer ohne Sonderrechte,
-  stark eingeschränkt durch systemd: Es darf nur in seinen Datenordner schreiben, hat keinen Zugriff auf Geräte,
-  Kernel-Einstellungen oder andere Prozesse und darf nur die nötigen Systemaufrufe nutzen.
-  Startet der Dienst in einem Container mit der vollen Einschränkung nicht, lockert `install.sh` nur die
-  container-abhängigen Optionen und meldet das.
-- **Automatische Sicherheitsupdates:** `install.sh` richtet `unattended-upgrades` ein. Damit installiert Debian
-  Sicherheitsupdates, z.B. für Python und OpenSSL, täglich selbst. Betroffene Dienste startet es danach neu.
-  Abschalten: in `/etc/apt/apt.conf.d/20auto-upgrades` beide Werte auf `"0"` setzen.
-- Updates des Dashboards laufen über einen getrennten Dienst, siehe [Updates im Dashboard](#updates-im-dashboard-proxmox).
-- Von aussen nur über VPN (WireGuard/Tailscale) erreichbar machen, keine Portweiterleitung im Router.
+**Server installation (Proxmox/LXC)**
+- HTTPS with an automatically renewed certificate. The dashboard runs as its own user without special privileges,
+  heavily restricted by systemd: it may only write to its data folder, has no access to devices, kernel settings or
+  other processes and may only use the necessary system calls. If the service does not start in a container with the
+  full restrictions, `install.sh` relaxes only the container-dependent options and reports it.
+- **Automatic security updates:** `install.sh` sets up `unattended-upgrades`. Debian then installs security updates,
+  e.g. for Python and OpenSSL, by itself every day. Affected services are restarted afterwards.
+  To switch off: set both values in `/etc/apt/apt.conf.d/20auto-upgrades` to `"0"`.
+- Dashboard updates run through a separate service, see [Updates in the dashboard](#updates-in-the-dashboard-proxmox).
+- Make it reachable from outside only through a VPN (WireGuard/Tailscale), no port forwarding on your router.
 
-**Lokal und Docker:** Lokal ist das Dashboard nur auf dem eigenen Computer erreichbar (`127.0.0.1`).
-Docker läuft ohne HTTPS und gehört deshalb nur ins Heimnetz oder hinter ein VPN. Aktuelle System-Bibliotheken
-kommen dort mit jedem neuen Image.
+**Local and Docker:** locally the dashboard is reachable only from your own computer (`127.0.0.1`).
+Docker runs without HTTPS and therefore belongs only in your home network or behind a VPN. Current system libraries
+arrive there with every new image.
 
-## Datenschutz
-Deine Finanzdaten bleiben auf deinem Gerät bzw. Server. Es gibt kein Benutzerkonto, keine Cloud und keine
-Telemetrie. Das Dashboard verbindet sich nur mit diesen Diensten, immer vom Server aus und nie direkt aus dem Browser:
+## Privacy
+Your financial data stays on your device or server. There is no user account, no cloud and no telemetry. The dashboard
+connects only to these services, always from the server and never directly from the browser:
 
-| Dienst | Wozu | Was gesendet wird |
+| Service | Purpose | What is sent |
 |---|---|---|
-| Yahoo Finance | Kurse und Wechselkurse | Ticker-Symbole deiner Positionen |
-| Google News | News-Ticker (in den Einstellungen abschaltbar) | Suchbegriffe zu deinen Positionen |
-| Statistisches Amt Kanton Zürich | Gemeindesteuerfüsse (Spartipps) | nichts Persönliches (offene Daten) |
-| GitHub | tägliche Prüfung auf neue Versionen, Download von Updates | nichts Persönliches |
+| Yahoo Finance | Prices and exchange rates | Ticker symbols of your positions |
+| Google News | News ticker (can be switched off in the settings) | Search terms for your positions |
+| Statistical Office of the canton of Zurich | Municipal tax rates (savings tips) | nothing personal (open data) |
+| GitHub | Daily check for new versions, download of updates | nothing personal |
 
-Mengen, Beträge und Transaktionen verlassen das Gerät nie.
+Quantities, amounts and transactions never leave the device.
 
-Das Repository enthält nur Code und erfundene Beispieldaten. Datenbank, Sicherungen, eigene CSV/PDF-Exporte,
-`.env`-Dateien und Zertifikate sind per `.gitignore` ausgeschlossen. Lokal getestet landet die Datenbank in
-`data/` (ebenfalls ignoriert).
+The repository contains only code and made-up sample data. Database, backups, your own CSV/PDF exports, `.env` files
+and certificates are excluded via `.gitignore`. When tested locally the database ends up in `data/` (also ignored).

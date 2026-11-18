@@ -51,7 +51,7 @@ Sprache im Projekt: Deutsch (Schweizer Schreibweise, „ss“ statt „ß“), U
   Importe mit den Dateien aus `beispiel-csv/` prüfen.
 - `python3 -m py_compile app/*.py finance-dashboard-update tests/*.py packaging/*.py`, `for f in app/static/*.js; do node --check "$f"; done`, `bash -n install.sh`.
 - `python3 tests/calc_unit.py`, `python3 tests/update_verify.py`, `python3 tests/smoke_server.py` und `python3 tests/smoke_local.py` (laufen auch in GitHub Actions auf Windows/macOS/Linux).
-- Bei UI-Änderungen einen Screenshot (hell/dunkel, Desktop/Handy) ansehen; README bei neuen Funktionen ergänzen.
+- Bei UI-Änderungen einen Screenshot (hell/dunkel, Desktop/Handy) ansehen; README bei neuen Funktionen ergänzen, und zwar in beiden Sprachen: `README.md` (Englisch, Standardansicht auf GitHub) und `README.de.md` (Deutsch) parallel pflegen.
 
 ## Arbeitsteilung (Projektleiter und Arbeiter)
 - Die Hauptsitzung ist der Projektleiter: Sie plant, zerlegt Aufgaben, delegiert, prüft die Ergebnisse und ist allein für Commit und Push zuständig.
