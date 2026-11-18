@@ -135,15 +135,18 @@ zeigt an, dass ein Update bereitliegt.
   Version zurück. Zusätzlich gibt es den Button *Vorherige Version wiederherstellen*.
 - Lädst du von Hand einen neueren Download herunter, wird automatisch dieser verwendet.
 
-**Passwort vergessen?** Ohne Befehl geht es auf zwei Wegen, deine Daten bleiben in jedem Fall erhalten:
-- Auf der Anmeldeseite *Passwort vergessen?* wählen und den **Wiederherstellungscode** eingeben
-  (siehe [Sicherheit](#sicherheit)).
-- Im **Statusfenster** auf *Passwort zurücksetzen …* klicken. Danach öffnet sich der Browser, und du legst ein
-  neues Passwort fest.
+**Passwort vergessen?** Ein neues Passwort legst du mit deinem **Wiederherstellungscode** fest
+(siehe [Sicherheit](#sicherheit)): auf der Anmeldeseite *Passwort vergessen?* wählen oder im **Statusfenster**
+*Passwort vergessen …* → *Mit Wiederherstellungscode …*.
 
-Notlösung im Terminal, im entpackten Ordner der Python-Variante:
-- macOS und Linux: `FD_DATA_DIR=<Datenordner> python3 app/server.py --reset-password`
-- Windows: zuerst `set FD_DATA_DIR=%LOCALAPPDATA%\FinanzDashboard`, danach `py app\server.py --reset-password`
+Ohne Wiederherstellungscode bleibt nur ein **Neubeginn**: Statusfenster → *Passwort vergessen …* → *Neu beginnen –
+alle Daten löschen …* und mit `LÖSCHEN` bestätigen. Alle Portfolios, Transaktionen und Einstellungen werden endgültig
+gelöscht, danach startet ein leeres Dashboard. So kann niemand, der an deinem entsperrten Computer sitzt, deine Daten
+mit einem eigenen Passwort öffnen.
+
+> Wirksamen Schutz vor Personen mit Zugang zu deinem Computer bietet dein Computer-Konto: Bildschirm sperren,
+> Windows-/macOS-Passwort oder Windows Hello/Touch ID verwenden und die Laufwerksverschlüsselung (BitLocker/FileVault)
+> einschalten.
 
 ## Docker (NAS, Raspberry Pi)
 
