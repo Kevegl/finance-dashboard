@@ -3,6 +3,22 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.1.1
+
+### Behoben
+- **Windows: «GitHub nicht erreichbar: Das Zertifikat konnte nicht geprüft werden»**, vor allem auf frisch
+  eingerichteten PCs. Python kennt nur die Stammzertifikate, die beim Start im Windows-Speicher liegen. Windows lädt
+  fehlende aber erst bei Bedarf nach. Das Dashboard überlässt die Prüfung in diesem Fall jetzt Windows selbst, wie
+  Edge oder Chrome: Windows prüft Kette, Servername und Gültigkeit und lädt fehlende Zertifikate dabei selbst nach.
+  Kein Öffnen von Edge, kein Neustart und kein PowerShell-Umweg mehr nötig. Ungültige Zertifikate werden weiterhin
+  abgelehnt. Gilt auch für Kurse, News und Steuerfüsse.
+
+**Update unter Windows, falls die Zertifikatsmeldung gerade erscheint:** das Programm von hier herunterladen und den
+Programmordner ersetzen (die Daten bleiben erhalten). Ab 1.1.1 laufen Updates wieder direkt im Dashboard.
+
+*English:* Windows: certificate errors (“GitHub not reachable”) are fixed for good – the check is handed to Windows
+itself, which fetches missing root certificates automatically.
+
 ## 1.1.0
 
 ### Neu

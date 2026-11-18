@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 APP = ROOT / "app"
 NAME = "FinanzDashboard"
 # Reserve: Module, die spätere Versionen von app/ zusätzlich brauchen könnten
-EXTRA = ["calendar", "decimal", "fractions", "statistics", "uuid", "gzip", "bz2", "lzma", "tarfile", "html",
+EXTRA = ["ctypes", "ctypes.wintypes", "calendar", "decimal", "fractions", "statistics", "uuid", "gzip", "bz2", "lzma", "tarfile", "html",
          "html.parser", "xml.etree.ElementTree", "email.utils", "email.message", "mimetypes", "locale", "shlex",
          "difflib", "textwrap", "string", "random", "heapq", "bisect", "copy", "pprint", "queue", "concurrent.futures",
          "unicodedata", "codecs", "encodings.idna", "importlib.machinery", "http.cookiejar", "socketserver",

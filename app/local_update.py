@@ -19,7 +19,6 @@ import os
 import re
 import shutil
 import ssl
-import subprocess
 import sys
 import tempfile
 import time
@@ -140,16 +139,15 @@ def version_info(version, date=None, subject=None):
 
 # ---------------------------------------------------------------- HTTPS (mit Windows-Zertifikatsergänzung)
 
-CERT_HINT = ("Das Zertifikat konnte nicht geprüft werden (Windows-Zertifikatsspeicher unvollständig). "
-             "Bitte Windows Update ausführen oder die Seite einmal in Edge öffnen.")
-_WARMED = {}           # Adresse -> Zeitpunkt der letzten Ergänzung durch Windows
-_CTX = {"ctx": None}   # gemeinsamer TLS-Kontext (Zertifikatsliste), wird nach einer Ergänzung neu eingelesen
+CERT_HINT = ("Das Zertifikat wurde auch von der Windows-Zertifikatsprüfung nicht anerkannt. "
+             "Bitte Datum/Uhrzeit des Computers und die Internetverbindung prüfen (z.B. Firmen-Proxy, Virenschutz).")
+_CTX = {"ctx": None}     # gemeinsamer TLS-Kontext (Zertifikatsliste)
+_WIN = {"on": False}     # Windows: nach dem ersten Bedarf alle Verbindungen direkt von Windows prüfen lassen
 
 
 def https_context(fresh=False):
     """TLS-Kontext mit den Stammzertifikaten des Systems. Unter Windows zusätzlich der Speicher «AuthRoot»
-    (Drittanbieter-Stammzertifizierungsstellen), in den Windows automatisch nachgeladene Zertifikate legt.
-    Python liest die Zertifikate nur beim Erstellen des Kontexts – darum nach einer Ergänzung fresh=True."""
+    (Drittanbieter-Stammzertifizierungsstellen), in den Windows automatisch nachgeladene Zertifikate legt."""
     if _CTX["ctx"] is None or fresh:
         ctx = ssl.create_default_context()
         if sys.platform.startswith("win"):
@@ -172,39 +170,32 @@ def is_cert_error(e):
 
 
 def net_error_text(e):
-    return CERT_HINT if sys.platform.startswith("win") and is_cert_error(e) else str(e)
+    if sys.platform.startswith("win") and is_cert_error(e):
+        detail = str(getattr(e, "reason", e))
+        return CERT_HINT + (f" ({detail})" if "ungültig:" in detail else "")
+    return str(e)
 
 
-def warm_windows_certs(url):
-    """Windows lädt fehlende Stammzertifikate erst nach, wenn ein Windows-Programm die Seite aufruft – Python
-    prüft nur gegen bereits vorhandene. Ein unsichtbarer Aufruf über PowerShell ergänzt sie (Prüfung bleibt aktiv)."""
-    env = dict(os.environ, FD_WARM_URL=url)   # Adresse als Variable, nie als Teil des Befehls
-    try:
-        subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-                        "try { Invoke-WebRequest -UseBasicParsing -Method Head -TimeoutSec 20 "
-                        "-Uri $env:FD_WARM_URL | Out-Null } catch { }"],
-                       env=env, timeout=45, capture_output=True, check=False,
-                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    except (OSError, subprocess.SubprocessError):
-        pass
+def _windows_urlopen(req, timeout):
+    import wincert                     # nur unter Windows (ctypes, crypt32)
+    return wincert.urlopen(req, timeout=timeout)
 
 
 def urlopen(req, timeout=30):
-    """urllib.request.urlopen; unter Windows bei fehlendem Stammzertifikat einmal pro Adresse ergänzen und wiederholen."""
+    """urllib.request.urlopen mit Zertifikatsprüfung. Unter Windows prüft bei Bedarf Windows selbst (wie Edge/Chrome):
+    Python/OpenSSL kennt nur die beim Start vorhandenen Stammzertifikate, Windows lädt fehlende selbst nach."""
+    if _WIN["on"]:
+        return _windows_urlopen(req, timeout)
     try:
         return urllib.request.urlopen(req, timeout=timeout, context=https_context())  # noqa: S310
     except urllib.error.URLError as e:
         if not (sys.platform.startswith("win") and is_cert_error(e)):
             raise
         url = req.full_url if isinstance(req, urllib.request.Request) else str(req)
-        host = urllib.parse.urlsplit(url).hostname or ""
-        if time.time() - _WARMED.get(host, 0) < 600:    # höchstens alle 10 Minuten pro Adresse
-            raise
-        _WARMED[host] = time.time()
-        print(f"Zertifikat für {host} fehlt im Windows-Speicher – lasse Windows es ergänzen …", flush=True)
-        warm_windows_certs(url)
-        # Zertifikatsliste neu einlesen – sonst würde die Wiederholung mit dem alten Stand scheitern
-        return urllib.request.urlopen(req, timeout=timeout, context=https_context(fresh=True))  # noqa: S310
+        print(f"Zertifikat für {urllib.parse.urlsplit(url).hostname} fehlt in Python – prüfe mit Windows …", flush=True)
+        resp = _windows_urlopen(req, timeout)
+        _WIN["on"] = True              # ab jetzt direkt, spart den ersten Fehlversuch
+        return resp
 
 
 # ---------------------------------------------------------------- GitHub Releases
