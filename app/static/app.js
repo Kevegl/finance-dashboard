@@ -959,8 +959,8 @@ async function loadSettings() {
       ? esc(L("Ein Wiederherstellungscode ist vorhanden. Aus Sicherheitsgründen wird er nicht mehr angezeigt – bei Verlust kannst du einen neuen erzeugen (der alte wird dann ungültig).",
         "A recovery code exists. For security it is not shown again – if you lose it you can generate a new one (the old one becomes invalid)."))
       : `<span class="warn"><b>${esc(L("Es gibt noch keinen Wiederherstellungscode.", "There is no recovery code yet."))}</b></span> `
-        + esc(L("Erzeuge jetzt einen und bewahre ihn sicher auf – sonst ist ein vergessenes Passwort nur über den Befehl auf dem Server bzw. das Statusfenster zurückzusetzen.",
-          "Generate one now and keep it safe – otherwise a forgotten password can only be reset with the server command or the status window."));
+        + esc(L("Erzeuge jetzt einen und bewahre ihn sicher auf – ohne Code bleibt bei einem vergessenen Passwort lokal nur ein Neubeginn, bei dem alle Daten gelöscht werden (auf einem Server der Befehl im Container).",
+          "Generate one now and keep it safe – without a code, a forgotten password locally means starting over with all data deleted (on a server: the command in the container)."));
     loadAuthLog();
     loadUpdate(true).then(() => { if (updWaiting() || (upd.st && upd.st.busy)) { upd.since = upd.since || Date.now(); updPoll(); } });
     $("#localCard").hidden = !s.local;
@@ -1030,7 +1030,7 @@ const authEvent = (e) => ({
   recovery_fail: L("Fehlversuch (Wiederherstellungscode)", "Failed attempt (recovery code)"),
   setup_fail: L("Fehlversuch (Einrichtungscode)", "Failed attempt (setup code)"),
   recovery_new: L("Neuer Wiederherstellungscode", "New recovery code"), totp_on: L("Zwei-Faktor eingeschaltet", "Two-factor switched on"),
-  totp_off: L("Zwei-Faktor ausgeschaltet", "Two-factor switched off"), reset_cli: L("Anmeldung per Befehl/Statusfenster zurückgesetzt", "Sign-in reset via command/status window"),
+  totp_off: L("Zwei-Faktor ausgeschaltet", "Two-factor switched off"), reset_cli: L("Anmeldung per Befehl zurückgesetzt", "Sign-in reset via command"),
   logout_others: L("Andere Geräte abgemeldet", "Other devices signed out") }[e] || e);
 async function loadAuthLog() {
   try {
@@ -1392,8 +1392,10 @@ $("#btnUpdRollback").onclick = async () => {
     if (st.news === false) state.newsOn = false;
     if (st.lang && st.lang !== LANG) applyLanguage(st.lang);
     authSetupCode = !!st.setup_code;
+    const wantRecover = location.hash === "#/passwort-vergessen";   // Link aus dem Statusfenster
+    if (wantRecover) history.replaceState(null, "", location.pathname + location.search);
     if (st.setup_required) showAuth("setup");
-    else if (!st.authenticated) showAuth("login");
+    else if (!st.authenticated) showAuth(wantRecover ? "recover" : "login");
     else showApp();
   } catch (e) { toast(L("Server nicht erreichbar: ", "Server not reachable: ") + e.message, 6000); }
 })();

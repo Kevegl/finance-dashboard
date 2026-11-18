@@ -29,7 +29,7 @@ EXTRA = ["ctypes", "ctypes.wintypes", "calendar", "decimal", "fractions", "stati
          "difflib", "textwrap", "string", "random", "heapq", "bisect", "copy", "pprint", "queue", "concurrent.futures",
          "unicodedata", "codecs", "encodings.idna", "importlib.machinery", "http.cookiejar", "socketserver",
          "logging", "traceback", "dataclasses", "enum", "functools", "itertools", "operator", "typing",
-         "tkinter", "tkinter.ttk", "tkinter.messagebox"]   # Statusfenster (app/status_window.py)
+         "tkinter", "tkinter.ttk", "tkinter.messagebox", "tkinter.simpledialog"]   # Statusfenster (app/status_window.py)
 
 
 def stdlib_imports():

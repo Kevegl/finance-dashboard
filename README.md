@@ -136,13 +136,16 @@ update is available.
   version. There is also a *Restore previous version* button.
 - If you manually download a newer copy, that one is used automatically.
 
-**Forgot your password?** Two ways without any command; your data is kept either way:
-- On the sign-in page choose *Forgot password?* and enter the **recovery code** (see [Security](#security)).
-- Click *Reset password …* in the **status window**. The browser then opens and you set a new password.
+**Forgot your password?** Set a new one with your **recovery code** (see [Security](#security)): on the sign-in
+page choose *Forgot password?*, or in the **status window** click *Forgot password …* → *With recovery code …*.
 
-Fallback in a terminal, in the unzipped folder of the Python variant:
-- macOS and Linux: `FD_DATA_DIR=<data folder> python3 app/server.py --reset-password`
-- Windows: first `set FD_DATA_DIR=%LOCALAPPDATA%\FinanzDashboard`, then `py app\server.py --reset-password`
+Without a recovery code you can only **start over**: status window → *Forgot password …* → *Start over – delete all
+data …* and confirm by typing `DELETE` (German: `LÖSCHEN`). All portfolios, transactions and settings are deleted
+permanently and an empty dashboard starts. This way nobody who sits at your unlocked computer can open your data with
+a password of their own.
+
+> Real protection against people with access to your computer comes from your computer account: lock the screen,
+> use a Windows/macOS password or Windows Hello/Touch ID, and turn on disk encryption (BitLocker/FileVault).
 
 ## Docker (NAS, Raspberry Pi)
 

@@ -3,6 +3,23 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.1.2
+
+### Geändert (Sicherheit)
+- **Passwort vergessen im lokalen Betrieb (Programm/Python):** Das Statusfenster setzte die Anmeldung bisher ohne
+  Nachweis zurück. Wer an einem entsperrten Computer sass, konnte so das Dashboard mit eigenem Passwort öffnen.
+  Jetzt bietet *Passwort vergessen …* im Statusfenster nur noch zwei Wege:
+  - *Mit Wiederherstellungscode …*: öffnet im Browser das Formular, ein neues Passwort gibt es nur mit dem Code.
+  - *Neu beginnen – alle Daten löschen …*: ohne Code. Nach Bestätigung durch Eintippen von `LÖSCHEN` werden alle
+    Portfolios, Transaktionen und Einstellungen endgültig gelöscht, danach startet ein leeres Dashboard.
+
+**Tipp:** Unter *Einstellungen → Wiederherstellungscode* prüfen, ob ein Code vorhanden ist, und ihn sicher
+aufbewahren. Wirksamen Schutz bei Zugang zum Computer bieten Bildschirmsperre, Computer-Passwort und
+Laufwerksverschlüsselung (BitLocker/FileVault).
+
+*English:* “Forgot password” in the status window now requires the recovery code; without it, the only option is to
+start over, which deletes all data.
+
 ## 1.1.1
 
 ### Behoben

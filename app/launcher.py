@@ -108,6 +108,7 @@ class Launcher:
         self.lang = None             # Sprache des Dashboards (de/en), sobald es läuft
         self.stopping = False        # Beenden über das Statusfenster angefordert
         self.interrupted = False     # Strg+C/Signal, während das Statusfenster offen ist
+        self.wipe_requested = False  # «Neu beginnen»: Daten löschen, sobald der Server beendet ist
 
     # ---------- Version wählen
     def active(self):
@@ -179,16 +180,39 @@ class Launcher:
         self.child = subprocess.Popen(self._server_cmd(app_dir), cwd=str(app_dir), env=self._server_env(version))
         return self.child
 
-    def reset_login(self):
-        """Setzt die Anmeldung zurück (Daten bleiben): führt `server.py --reset-password` gegen denselben
-        Datenordner aus und öffnet danach den Browser. Der laufende Server liest auth_* bei jeder Anfrage."""
-        app_dir, version = self.active()
-        try:
-            subprocess.run(self._server_cmd(app_dir, ["--reset-password"]), cwd=str(app_dir),
-                           env=self._server_env(version), timeout=60, check=False)
-        except (OSError, subprocess.SubprocessError):
+    # ---------- Passwort vergessen (Statusfenster)
+    DATA_FILES = ("finance.db", "finance.db-wal", "finance.db-shm", "finance.db-journal", "setup-code.txt")
+
+    def open_recovery(self):
+        """Öffnet im Browser «Passwort vergessen?» – neues Passwort nur mit dem Wiederherstellungscode."""
+        webbrowser.open(self.url + "#/passwort-vergessen")
+
+    def start_fresh(self):
+        """Neu beginnen ohne Wiederherstellungscode: ALLE Daten (Datenbank) werden gelöscht, danach startet ein leeres
+        Dashboard. Gelöscht wird in der Überwachung, sobald der Server beendet ist (sonst ist die Datei gesperrt)."""
+        self.wipe_requested = True
+        self.stop_child()
+
+    def wipe_data(self):
+        """Löscht die Datenbank. Gibt True zurück, wenn alles weg ist (sonst bleibt das Dashboard beendet)."""
+        left = []
+        for name in self.DATA_FILES:
+            f = self.data / name
+            for _ in range(40):                          # Windows gibt die Datei evtl. erst kurz nach dem Prozessende frei
+                try:
+                    f.unlink(missing_ok=True)
+                    break
+                except OSError:
+                    time.sleep(0.25)
+            if f.exists():
+                left.append(name)
+        if left:
+            fail(f"Die Daten konnten nicht vollständig gelöscht werden ({', '.join(left)}). Das Dashboard bleibt "
+                 f"beendet – bitte den Computer neu starten und es erneut versuchen.",
+                 f"The data could not be deleted completely ({', '.join(left)}). The dashboard stays closed – "
+                 f"please restart the computer and try again.")
             return False
-        webbrowser.open(self.url)
+        say("Alle Daten gelöscht – das Dashboard startet leer.", "All data deleted – the dashboard starts empty.")
         return True
 
     def wait_healthy(self):
@@ -310,7 +334,7 @@ class Launcher:
 
     def supervise(self, open_browser=True):
         """Startet den Server und überwacht ihn (Neustart nach Update, nach Absturz)."""
-        first, crashes = True, []
+        first, crashes, reopen = True, [], False
         while True:
             if self.stopping:
                 return 0
@@ -318,6 +342,10 @@ class Launcher:
             if not running:
                 app_dir, version = self.active()
                 self.start(app_dir, version)
+                if reopen:                                   # nach «Neu beginnen»: Einrichtung im Browser öffnen
+                    reopen = False
+                    if self.wait_healthy():
+                        webbrowser.open(self.url)
                 if first:
                     if not self.wait_healthy():
                         if self.stopping:
@@ -335,6 +363,12 @@ class Launcher:
             child = self.child
             code = child.wait() if child else 0
             self.child = None
+            if self.wipe_requested and not self.stopping:
+                self.wipe_requested = False
+                if not self.wipe_data():
+                    return 1
+                self.status, reopen = "restarting", True
+                continue
             if self.stopping or code == 0:
                 say("Das Finanz-Dashboard wurde beendet.", "The finance dashboard has been closed.")
                 return 0

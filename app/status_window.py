@@ -8,7 +8,7 @@ import threading
 import webbrowser
 
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import messagebox, simpledialog, ttk
 
 TEXT = {
     "de": {
@@ -18,11 +18,18 @@ TEXT = {
         "hint": "Du kannst dieses Fenster minimieren. Schliessen beendet das Dashboard.",
         "confirm_title": "Dashboard beenden?",
         "confirm": "Das Finanz-Dashboard wird beendet. Deine Daten sind gespeichert.",
-        "reset": "Passwort zurücksetzen …",
-        "reset_title": "Anmeldung zurücksetzen?",
-        "reset_confirm": "Deine Daten bleiben unverändert erhalten. Nur die Anmeldung wird zurückgesetzt: Passwort, "
-                         "Zwei-Faktor-Anmeldung und alle Sitzungen werden gelöscht.\n\nDanach öffnet sich der Browser, "
-                         "und du legst dort ein neues Passwort fest.",
+        "reset": "Passwort vergessen …",
+        "fg_title": "Passwort vergessen?",
+        "fg_code": "Ein neues Passwort legst du mit deinem Wiederherstellungscode fest – du hast ihn bei der "
+                   "Einrichtung erhalten.",
+        "fg_code_btn": "Mit Wiederherstellungscode …",
+        "fg_wipe": "Kein Wiederherstellungscode? Dann bleibt nur ein Neubeginn: Alle Portfolios, Transaktionen und "
+                   "Einstellungen werden endgültig gelöscht, danach startet ein leeres Dashboard.",
+        "fg_wipe_btn": "Neu beginnen – alle Daten löschen …",
+        "cancel": "Abbrechen",
+        "wipe_prompt": "Alle Daten werden endgültig gelöscht. Das lässt sich nicht rückgängig machen.\n\n"
+                       "Zum Bestätigen LÖSCHEN eingeben:",
+        "wipe_wrong": "Nicht bestätigt – es wurde nichts gelöscht.",
     },
     "en": {
         "starting": "Starting …", "running": "Running on this computer", "updating": "Updating …",
@@ -31,11 +38,16 @@ TEXT = {
         "hint": "You can minimise this window. Closing it quits the dashboard.",
         "confirm_title": "Quit the dashboard?",
         "confirm": "The finance dashboard will be closed. Your data is saved.",
-        "reset": "Reset password …",
-        "reset_title": "Reset sign-in?",
-        "reset_confirm": "Your data stays untouched. Only the sign-in is reset: password, two-factor "
-                         "authentication and all sessions are deleted.\n\nThe browser then opens and you set a "
-                         "new password there.",
+        "reset": "Forgot password …",
+        "fg_title": "Forgot your password?",
+        "fg_code": "You set a new password with your recovery code – you received it when you set up the dashboard.",
+        "fg_code_btn": "With recovery code …",
+        "fg_wipe": "No recovery code? Then the only option is to start over: all portfolios, transactions and "
+                   "settings are deleted permanently and an empty dashboard starts.",
+        "fg_wipe_btn": "Start over – delete all data …",
+        "cancel": "Cancel",
+        "wipe_prompt": "All data will be deleted permanently. This cannot be undone.\n\nType DELETE to confirm:",
+        "wipe_wrong": "Not confirmed – nothing was deleted.",
     },
 }
 COLOR = {"running": "#1f9d55", "stopping": "#8a8a8a"}   # sonst orange (startet, aktualisiert)
@@ -119,10 +131,40 @@ class StatusWindow:
             self.update_texts()
 
     def ask_reset(self):
+        """Passwort vergessen: neues Passwort nur mit Wiederherstellungscode (im Browser) – ohne Code nur Neubeginn
+        mit Löschen aller Daten. So kann niemand am entsperrten Computer das Dashboard mit eigenem Passwort öffnen."""
         if self.l.stopping or self.l.status != "running":
             return
-        if messagebox.askokcancel(self.t("reset_title"), self.t("reset_confirm"), parent=self.root):
-            threading.Thread(target=self.l.reset_login, daemon=True).start()
+        dlg = tk.Toplevel(self.root)
+        dlg.title(self.t("fg_title"))
+        dlg.resizable(False, False)
+        dlg.transient(self.root)
+        frm = ttk.Frame(dlg, padding=(18, 14, 18, 16))
+        frm.grid(sticky="nsew")
+        ttk.Label(frm, text=self.t("fg_title"), font=("TkDefaultFont", 12, "bold")).grid(row=0, column=0, sticky="w")
+        ttk.Label(frm, text=self.t("fg_code"), wraplength=340, justify="left").grid(row=1, column=0, sticky="w", pady=(8, 6))
+
+        def with_code():
+            dlg.destroy()
+            self.l.open_recovery()
+
+        ttk.Button(frm, text=self.t("fg_code_btn"), command=with_code).grid(row=2, column=0, sticky="w")
+        ttk.Separator(frm).grid(row=3, column=0, sticky="ew", pady=14)
+        ttk.Label(frm, text=self.t("fg_wipe"), wraplength=340, justify="left", foreground="#666666").grid(
+            row=4, column=0, sticky="w", pady=(0, 6))
+
+        def wipe():
+            answer = simpledialog.askstring(self.t("fg_wipe_btn"), self.t("wipe_prompt"), parent=dlg)
+            if (answer or "").strip().upper() not in ("LÖSCHEN", "LOESCHEN", "DELETE"):
+                if answer is not None:
+                    messagebox.showinfo(self.t("fg_title"), self.t("wipe_wrong"), parent=dlg)
+                return
+            dlg.destroy()
+            threading.Thread(target=self.l.start_fresh, daemon=True).start()
+
+        ttk.Button(frm, text=self.t("fg_wipe_btn"), command=wipe).grid(row=5, column=0, sticky="w")
+        ttk.Button(frm, text=self.t("cancel"), command=dlg.destroy).grid(row=6, column=0, sticky="e", pady=(16, 0))
+        dlg.grab_set()
 
     def run(self, worker):
         """Läuft im Hauptthread, bis die Überwachung (worker) endet."""

@@ -186,7 +186,7 @@ const EN = {
 
 const EN_HTML = {
   authSetupHint: "<code>install.sh</code> shows the setup code at the end. It is also in the dashboard's log (<code>journalctl -u finance-dashboard</code> or <code>docker logs</code>) and in the file <code>setup-code.txt</code> in the data folder.",
-  recNoCode: "No code any more? On a server or in Docker, run <code>python3 server.py --reset-password</code> (on the server). When running locally, choose “Reset password” in the status window.",
+  recNoCode: "No code any more? When running locally (program/Python) the only option is to start over: in the status window choose “Forgot password …” → “Start over” – this deletes all data. On a server or in Docker, run <code>python3 server.py --reset-password</code> (on the server).",
   updUnavailable: "Updates via the dashboard are only available if it was installed with <code>git clone</code>. See the README for instructions.",
   updDocker: "In Docker the dashboard is updated with a new image: <code>docker compose pull &amp;&amp; docker compose up -d</code> (or automatically with Watchtower). Your data in the volume is kept.",
   updHint: "The dashboard checks for a new version automatically every day. Nothing is installed until you click “Update now”. Your data stays unchanged; if the dashboard does not start after the update, the previous version is restored automatically.",

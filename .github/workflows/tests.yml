@@ -51,6 +51,8 @@ jobs:
           python-version: "3.12"
       - name: Startprogramm direkt
         run: python tests/smoke_local.py
+      - name: Passwort vergessen – Neubeginn löscht alle Daten
+        run: python tests/local_wipe.py
       - name: start.bat (Windows)
         if: runner.os == 'Windows'
         run: python tests/smoke_local.py -- cmd /c start.bat
