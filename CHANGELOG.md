@@ -3,6 +3,21 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.1.4
+
+### Behoben
+- **«Neu beginnen» im Statusfenster (lokaler Betrieb):** Wurde während eines Updates oder Neustarts bestätigt, konnte
+  die Überwachung des Dashboards abbrechen oder die Daten erst später, beim nächsten Neustart, gelöscht werden. Jetzt
+  ist «Neu beginnen» nur möglich, solange das Dashboard normal läuft. Dabei wird auch das Serverprotokoll gelöscht.
+- **Statusfenster unter Linux:** Der Dialog «Passwort vergessen …» ist jetzt zuverlässig modal (bisher Fehler
+  «grab failed», und der Dialog liess sich mehrfach öffnen).
+- **ZIP-Import:** Doppelte Dateien im Archiv zählen nicht mehr zur Grenze von 500 MB.
+
+*English:* «Start over» in the status window is only possible while the dashboard is running normally (previously a
+click during an update or restart could stop the supervision or delete the data later) and also deletes the server
+log; the «Forgot password …» dialog is reliably modal on Linux; duplicate files in a ZIP no longer count toward the
+500 MB limit.
+
 ## 1.1.3
 
 ### Geändert (Sicherheit)
