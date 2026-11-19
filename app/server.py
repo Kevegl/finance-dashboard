@@ -21,6 +21,7 @@ import io
 import json
 import os
 import re
+import socketserver
 import ssl
 import sys
 import threading
@@ -787,6 +788,11 @@ class Handler(BaseHTTPRequestHandler):
 
 class Server(ThreadingHTTPServer):
     daemon_threads = True
+
+    def server_bind(self):
+        # wie HTTPServer.server_bind, aber ohne socket.getfqdn(): Die Namensauflösung dauert z.B. auf macOS bis zu 30 s
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = str(self.server_address[0]), self.server_address[1]
 
     def handle_error(self, request, client_address):
         err = sys.exc_info()[1]

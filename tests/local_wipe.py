@@ -64,7 +64,11 @@ def main():
         assert wait_up()["setup_required"] is False, "Wiederherstellungs-Link darf nichts zurücksetzen"
         print("✓ «Mit Wiederherstellungscode» öffnet nur das Formular", flush=True)
 
-        threading.Thread(target=lau.start_fresh, daemon=True).start()
+        for _ in range(240):            # «Neu beginnen» gibt es erst, wenn das Startprogramm den Server als laufend führt
+            if lau.status == "running":
+                break
+            time.sleep(0.25)
+        assert lau.start_fresh(), f"«Neu beginnen» abgelehnt (Status {lau.status})"
         for _ in range(120):            # warten, bis der neue (leere) Server läuft
             time.sleep(0.5)
             try:
