@@ -3,7 +3,7 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
-## Unveröffentlicht
+## 1.1.3
 
 ### Geändert (Sicherheit)
 - **Lokaler Betrieb (Programm/Python): Schutz vor DNS-Rebinding.** Das Dashboard beantwortet nur noch Anfragen an
