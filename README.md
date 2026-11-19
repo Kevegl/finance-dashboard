@@ -453,7 +453,8 @@ The built files are then available as artifacts of the run.
   way nobody on the network can take over a fresh installation before you. The code is in the output of
   `install.sh`, in the log (`journalctl -u finance-dashboard` or `docker logs`) and in `setup-code.txt` in the data
   folder. It is deleted after setup; after `--reset-password` there is a new one. In local mode (program/`start.*`,
-  reachable only from this computer) no code is needed.
+  reachable only from this computer) no code is needed. Instead the local dashboard only answers requests addressed to
+  `127.0.0.1` or `localhost`, so a web page cannot reach it under its own domain name (DNS rebinding).
 - **Recovery code:** after setup the dashboard shows a code like `K7Q2M-…` once. Keep it separate from your password,
   e.g. in a password manager or printed. With it you set a new password on the sign-in page under *Forgot password?*,
   without any commands. A new code is issued immediately afterwards. Existing installations generate their code under

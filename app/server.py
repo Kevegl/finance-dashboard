@@ -170,10 +170,15 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _json(self):
-        n = int(self.headers.get("Content-Length") or 0)
-        if n > MAX_BODY:
-            raise ValueError("Datei zu gross (max. 100 MB)")
+    def _json(self, limit=MAX_BODY):
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = -1
+        if n < 0:
+            raise ValueError("Ungültige Anfrage")
+        if n > limit:
+            raise ValueError("Datei zu gross (max. 100 MB)" if limit == MAX_BODY else "Anfrage zu gross")
         raw = self.rfile.read(n) if n else b"{}"
         return json.loads(raw.decode("utf-8") or "{}")
 
@@ -203,7 +208,18 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(200, {"ok": True, **(extra_body or {})},
                           extra={"Set-Cookie": self._cookie(token, SESSION_DAYS * 86400)})
 
+    def _local_host_ok(self):
+        """Lokaler Betrieb: nur Aufrufe über 127.0.0.1/localhost annehmen. Schützt vor DNS-Rebinding (eine fremde
+        Webseite lässt ihren Namen auf 127.0.0.1 zeigen und spricht so das Dashboard an, z.B. vor der Ersteinrichtung,
+        die lokal keinen Einrichtungscode braucht)."""
+        port = self.server.server_address[1]
+        host = (self.headers.get("Host") or "").strip().lower()
+        return host in {f"127.0.0.1:{port}", f"localhost:{port}", f"[::1]:{port}"}
+
     def _guard(self, path):
+        if LOCAL and not self._local_host_ok():
+            self._send(421, {"error": "Unbekannter Hostname – bitte über http://127.0.0.1 öffnen."})
+            return False
         if self.command in ("POST", "PUT", "DELETE"):
             # Schutz vor Cross-Site-Requests: nur JSON von der eigenen Seite akzeptieren
             if not (self.headers.get("Content-Type") or "").startswith("application/json") and self.command != "DELETE":
@@ -350,7 +366,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self._guard(path):
             return
         try:
-            body = self._json()
+            # ohne Anmeldung (Login, Einrichtung) nur kleine Anfragen annehmen
+            body = self._json(64 * 1024 if path in self.PUBLIC else MAX_BODY)
             res = self._auth_api(path, body)
             if res is not None or path in self.PUBLIC:
                 return res
@@ -763,7 +780,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("", "/"):
             path = "/index.html"
         f = (STATIC / path.lstrip("/")).resolve()
-        if not str(f).startswith(str(STATIC)) or not f.is_file():
+        if not f.is_relative_to(STATIC.resolve()) or not f.is_file():
             f = STATIC / "index.html"
         return self._send(200, f.read_bytes(), MIME.get(f.suffix, "application/octet-stream"))
 

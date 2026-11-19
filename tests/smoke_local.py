@@ -62,6 +62,23 @@ def main():
         assert h == {"ok": True, "app": "finance-dashboard", "local": True}, h
         print("✓ läuft:", h, flush=True)
 
+        # DNS-Rebinding: fremder Hostname wird abgewiesen (auch die Ersteinrichtung), localhost funktioniert
+        def raw(path, host, body=None):
+            req = urllib.request.Request(BASE + path, method="POST" if body is not None else "GET",
+                                         data=json.dumps(body).encode() if body is not None else None,
+                                         headers={"Content-Type": "application/json", "Host": host,
+                                                  "Origin": f"http://{host}"})
+            try:
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    return r.status
+            except urllib.error.HTTPError as e:
+                return e.code
+        assert raw("/api/setup", f"rebind.example:{PORT}", {"username": "x", "password": "rebinding123"}) == 421
+        assert raw("/api/health", f"rebind.example:{PORT}") == 421
+        assert raw("/api/health", f"localhost:{PORT}") == 200
+        assert call("/api/auth/status")["setup_required"], "Einrichtung über fremden Hostnamen durchgegangen"
+        print("✓ fremder Hostname abgewiesen (DNS-Rebinding)", flush=True)
+
         assert call("/api/setup", {"username": "smoke", "password": "smoketest123"})["ok"]
         s = call("/api/settings")
         assert s["local"] and Path(s["local"]["data_dir"]).resolve() == Path(data).resolve(), s["local"]

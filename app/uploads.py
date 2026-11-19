@@ -13,6 +13,7 @@ import importers
 # PDF-/ZIP-Import (z.B. VIAC-Belege): Text via pdftotext (Paket poppler-utils)
 # --------------------------------------------------------------------------
 MAX_DOCS = 3000
+MAX_TOTAL = 500 * 1024 * 1024     # entpackt insgesamt (Schutz vor ZIP-Bomben)
 
 
 def pdf_text(data):
@@ -29,6 +30,7 @@ def pdf_text(data):
 def parse_uploaded_files(files):
     """files: [{name, data(base64)}] mit PDFs, ZIPs (mit PDFs/CSVs) oder CSVs."""
     pdfs, csvs, seen = [], [], set()
+    total = [0]
 
     def add(name, raw):
         digest = hashlib.sha1(raw).hexdigest()
@@ -54,6 +56,9 @@ def parse_uploaded_files(files):
                         if info.is_dir() or info.file_size > 20_000_000 or "__MACOSX" in info.filename:
                             continue
                         if info.filename.lower().endswith((".pdf", ".csv", ".txt")):
+                            total[0] += info.file_size      # entpackte Grösse (zipfile liest nie mehr als das)
+                            if total[0] > MAX_TOTAL:
+                                raise ValueError("Die Dateien sind entpackt zu gross (max. 500 MB).")
                             add(os.path.basename(info.filename), z.read(info))
             except zipfile.BadZipFile:
                 raise ValueError(f"{name}: ZIP-Datei beschädigt")

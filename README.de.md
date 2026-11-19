@@ -442,7 +442,9 @@ Release-Workflow auch ohne Veröffentlichung testen. Die gebauten Dateien liegen
   einen einmaligen Code. So kann niemand im Netzwerk eine frische Installation vor dir übernehmen. Der Code steht in
   der Ausgabe von `install.sh`, im Protokoll (`journalctl -u finance-dashboard` bzw. `docker logs`) und in
   `setup-code.txt` im Datenordner. Nach der Einrichtung wird er gelöscht; nach `--reset-password` gibt es einen neuen.
-  Im lokalen Betrieb (Programm/`start.*`, nur auf diesem Computer erreichbar) braucht es keinen Code.
+  Im lokalen Betrieb (Programm/`start.*`, nur auf diesem Computer erreichbar) braucht es keinen Code. Dafür
+  beantwortet das lokale Dashboard nur Anfragen an `127.0.0.1` oder `localhost`. So kann eine Webseite es nicht
+  unter ihrem eigenen Domainnamen ansprechen (DNS-Rebinding).
 - **Wiederherstellungscode:** Nach der Einrichtung zeigt das Dashboard einmalig einen Code wie
   `K7Q2M-…` an. Bewahre ihn getrennt vom Passwort auf, z.B. im Passwortmanager oder ausgedruckt. Damit setzt du auf
   der Anmeldeseite unter *Passwort vergessen?* ein neues Passwort, ganz ohne Befehle. Danach gibt es sofort einen

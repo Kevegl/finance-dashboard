@@ -3,6 +3,25 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## Unveröffentlicht
+
+### Geändert (Sicherheit)
+- **Lokaler Betrieb (Programm/Python): Schutz vor DNS-Rebinding.** Das Dashboard beantwortet nur noch Anfragen an
+  `127.0.0.1` bzw. `localhost`. Bisher hätte eine bösartige Webseite in der kurzen Zeit vor der Ersteinrichtung (die
+  lokal keinen Einrichtungscode braucht) über einen auf 127.0.0.1 zeigenden Domainnamen das Passwort festlegen können.
+- **Anfragen ohne Anmeldung** (Anmeldung, Einrichtung, Wiederherstellung) dürfen höchstens 64 KB gross sein, und eine
+  negative Längenangabe wird abgewiesen. Bisher hätte jemand im Netzwerk damit den Speicher des Servers füllen können.
+- **ZIP-Import:** Entpackt höchstens 500 MB insgesamt (Schutz vor ZIP-Bomben).
+- **Statische Dateien:** strengere Pfadprüfung (nur innerhalb von `app/static`).
+- **Anzeige:** Typ und Währung von Transaktionen werden immer maskiert, auch wenn sie aus einer manipulierten
+  Sicherungsdatei stammen.
+- **Proxmox-Installation:** Der Programmcode unter `/opt/finance-dashboard` gehört jetzt root und ist für den Dienst
+  nur lesbar. So kann auch ein übernommenes Dashboard keinen Code ablegen, den root später ausführt.
+
+*English:* The local dashboard now only answers requests for `127.0.0.1`/`localhost` (DNS rebinding protection);
+unauthenticated requests are limited to 64 KB; ZIP imports are capped at 500 MB unpacked; stricter static path check;
+transaction type/currency always escaped; on Proxmox the program code is owned by root.
+
 ## 1.1.2
 
 ### Geändert (Sicherheit)

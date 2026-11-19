@@ -49,7 +49,10 @@ id finance >/dev/null 2>&1 || useradd --system --home "$DEST" --shell /usr/sbin/
 mkdir -p "$DEST" /var/lib/finance-dashboard
 rm -rf "$DEST/app"
 cp -r "$SRC/app" "$DEST/"
-chown -R finance:finance "$DEST" /var/lib/finance-dashboard
+# Programmcode gehört root (nur lesbar für den Dienst): Selbst ein übernommenes Dashboard kann keinen Code ablegen,
+# den root später ausführt (z.B. server.py --reset-password). Schreiben darf der Dienst nur im Datenordner.
+chown -R root:root "$DEST"; chmod -R u=rwX,go=rX "$DEST"
+chown -R finance:finance /var/lib/finance-dashboard
 chmod 750 /var/lib/finance-dashboard
 
 # --- Einstellungen (fehlende Werte werden ergänzt, vorhandene nie überschrieben)

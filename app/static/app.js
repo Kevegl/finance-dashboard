@@ -11,7 +11,7 @@ function money(v, ccy, opts = {}) {
   try {
     return new Intl.NumberFormat(LOCALE, { style: "currency", currency: ccy || state.summary?.base || "CHF",
       maximumFractionDigits: opts.dec ?? 2, minimumFractionDigits: opts.dec ?? 2 }).format(v);
-  } catch { return num(v, 2) + " " + (ccy || ""); }
+  } catch { return num(v, 2) + " " + esc(ccy || ""); }
 }
 function num(v, dec = 2) {
   if (v == null || isNaN(v)) return "–";
@@ -19,7 +19,7 @@ function num(v, dec = 2) {
 }
 function qty(v) { return num(v, Math.abs(v) < 1 ? 8 : 4); }
 const HIDDEN = "•••••";
-const amt = (v, ccy, opts) => (state.hide ? `${ccy || state.summary?.base || "CHF"} ${HIDDEN}` : money(v, ccy, opts));
+const amt = (v, ccy, opts) => (state.hide ? `${esc(ccy || state.summary?.base || "CHF")} ${HIDDEN}` : money(v, ccy, opts));
 const qtyS = (v) => (state.hide ? HIDDEN : qty(v));
 function pct(v) { return v == null || isNaN(v) ? "–" : (v > 0 ? "+" : "") + num(v, 2) + " %"; }
 function signed(v) { return (v > 0 ? "+" : v < 0 ? "−" : "") + (state.hide ? HIDDEN : money(Math.abs(v))); }
@@ -456,7 +456,7 @@ function renderTxs() {
   $("#txTable tbody").innerHTML = list.slice(0, state.txLimit).map((t) => `<tr class="${state.sel.has(t.id) ? "selected" : ""}">
       <td class="chk"><input type="checkbox" data-sel="${t.id}" ${state.sel.has(t.id) ? "checked" : ""} aria-label="${L("Auswählen", "Select")}"></td>
       <td>${dateCH(t.date)}</td>
-      <td><span class="pill ${t.type}">${esc(typeName(t.type))}</span></td>
+      <td><span class="pill ${esc(t.type)}">${esc(typeName(t.type))}</span></td>
       <td><b>${esc(t.asset)}</b></td>
       <td class="num">${["buy", "sell"].includes(t.type) ? qtyS(t.quantity) : "–"}</td>
       <td class="num">${t.price ? money(t.price, t.currency) : "–"}</td>
