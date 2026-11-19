@@ -109,6 +109,7 @@ class Launcher:
         self.stopping = False        # Beenden über das Statusfenster angefordert
         self.interrupted = False     # Strg+C/Signal, während das Statusfenster offen ist
         self.wipe_requested = False  # «Neu beginnen»: Daten löschen, sobald der Server beendet ist
+        self.lock = threading.Lock()  # Übergabe von child/wipe_requested zwischen Statusfenster und Überwachung
 
     # ---------- Version wählen
     def active(self):
@@ -189,9 +190,14 @@ class Launcher:
 
     def start_fresh(self):
         """Neu beginnen ohne Wiederherstellungscode: ALLE Daten (Datenbank) werden gelöscht, danach startet ein leeres
-        Dashboard. Gelöscht wird in der Überwachung, sobald der Server beendet ist (sonst ist die Datei gesperrt)."""
-        self.wipe_requested = True
-        self.stop_child()
+        Dashboard. Gelöscht wird in der Überwachung, sobald der Server beendet ist (sonst ist die Datei gesperrt).
+        Nur während der Server normal läuft – nicht während Start, Update oder Neustart (gibt dann False zurück)."""
+        with self.lock:
+            if self.stopping or self.status != "running" or self.child is None or self.child.poll() is not None:
+                return False
+            self.wipe_requested = True
+            self.stop_child()
+        return True
 
     def wipe_data(self):
         """Löscht die Datenbank. Gibt True zurück, wenn alles weg ist (sonst bleibt das Dashboard beendet)."""
@@ -206,6 +212,11 @@ class Launcher:
                     time.sleep(0.25)
             if f.exists():
                 left.append(name)
+        for name in ("server.log", "server.log.1"):       # Protokoll des Servers (vom beendeten Kindprozess)
+            try:
+                (lu.local_dir(self.data) / name).unlink(missing_ok=True)
+            except OSError:
+                pass
         if left:
             fail(f"Die Daten konnten nicht vollständig gelöscht werden ({', '.join(left)}). Das Dashboard bleibt "
                  f"beendet – bitte den Computer neu starten und es erneut versuchen.",
@@ -218,7 +229,8 @@ class Launcher:
     def wait_healthy(self):
         deadline = time.time() + HEALTH_WAIT
         while time.time() < deadline:
-            if self.child.poll() is not None:
+            child = self.child
+            if child is None or child.poll() is not None:
                 return False
             if self.health(timeout=2):
                 return True
@@ -362,9 +374,10 @@ class Launcher:
             self.status = "running"
             child = self.child
             code = child.wait() if child else 0
-            self.child = None
-            if self.wipe_requested and not self.stopping:
-                self.wipe_requested = False
+            with self.lock:
+                self.child = None
+                wipe, self.wipe_requested = self.wipe_requested, False
+            if wipe and not self.stopping:
                 if not self.wipe_data():
                     return 1
                 self.status, reopen = "restarting", True

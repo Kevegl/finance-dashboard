@@ -164,7 +164,11 @@ class StatusWindow:
 
         ttk.Button(frm, text=self.t("fg_wipe_btn"), command=wipe).grid(row=5, column=0, sticky="w")
         ttk.Button(frm, text=self.t("cancel"), command=dlg.destroy).grid(row=6, column=0, sticky="e", pady=(16, 0))
-        dlg.grab_set()
+        try:
+            dlg.wait_visibility()                        # X11: grab erst, wenn das Fenster sichtbar ist
+            dlg.grab_set()
+        except tk.TclError:
+            pass
 
     def run(self, worker):
         """Läuft im Hauptthread, bis die Überwachung (worker) endet."""

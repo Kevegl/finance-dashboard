@@ -35,13 +35,14 @@ def parse_uploaded_files(files):
     def add(name, raw):
         digest = hashlib.sha1(raw).hexdigest()
         if digest in seen:          # gleiche Datei doppelt ausgewählt
-            return
+            return False
         seen.add(digest)
         low = name.lower()
         if raw[:5] == b"%PDF-" or low.endswith(".pdf"):
             pdfs.append((name, raw))
         elif low.endswith((".csv", ".txt")):
             csvs.append((name, raw))
+        return True
 
     for f in files:
         name = os.path.basename(str(f.get("name") or "datei"))
@@ -56,10 +57,11 @@ def parse_uploaded_files(files):
                         if info.is_dir() or info.file_size > 20_000_000 or "__MACOSX" in info.filename:
                             continue
                         if info.filename.lower().endswith((".pdf", ".csv", ".txt")):
-                            total[0] += info.file_size      # entpackte Grösse (zipfile liest nie mehr als das)
-                            if total[0] > MAX_TOTAL:
-                                raise ValueError("Die Dateien sind entpackt zu gross (max. 500 MB).")
-                            add(os.path.basename(info.filename), z.read(info))
+                            # entpackte Grösse (zipfile liest nie mehr als file_size); Duplikate zählen nicht mit
+                            if add(os.path.basename(info.filename), z.read(info)):
+                                total[0] += info.file_size
+                                if total[0] > MAX_TOTAL:
+                                    raise ValueError("Die Dateien sind entpackt zu gross (max. 500 MB).")
             except zipfile.BadZipFile:
                 raise ValueError(f"{name}: ZIP-Datei beschädigt")
         else:
