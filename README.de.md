@@ -30,7 +30,8 @@ Weitere Funktionen folgen, z.B. Importe von weiteren Brokern und 3a-Anbietern. P
 2. **Importieren** – Datei ins Dashboard ziehen. Es erkennt den Anbieter, zeigt eine Vorschau und überspringt
    Einträge, die schon vorhanden sind. Erst mit dem Klick auf *Importieren* wird etwas gespeichert.
 3. **Überblick behalten** – Kurse und Wechselkurse werden automatisch aktualisiert. Oben siehst du Gesamtwert,
-   investiertes Geld und Gewinn, darunter die Entwicklung über die Zeit, die Aufteilung und alle Positionen.
+   investiertes Geld und Gewinn, darunter die Entwicklung über die Zeit, die Aufteilung und alle Positionen –
+   jeweils mit der Kursveränderung der letzten 24 Stunden in Prozent.
 
 <table>
   <tr>

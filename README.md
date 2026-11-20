@@ -34,7 +34,8 @@ More features are planned, e.g. imports from further brokers and 3a providers. P
 2. **Import** – drag the file into the dashboard. It recognises the provider, shows a preview and skips entries that
    already exist. Nothing is saved until you click *Import*.
 3. **Keep the overview** – prices and exchange rates update automatically. At the top you see total value, money
-   invested and profit, below that the development over time, the allocation and all positions.
+   invested and profit, below that the development over time, the allocation and all positions –
+   each with its price change over the last 24 hours in percent.
 
 <table>
   <tr>

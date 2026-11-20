@@ -419,10 +419,13 @@ function renderHoldings(s) {
     if (h.is_cash) return `<tr data-sym="CASH" style="${closed ? "opacity:.55" : ""}">
       <td><div class="asset"><span class="badge" style="background:${colorOf(h)}">CHF</span>
         <span class="t"><b>${L("Kontoguthaben", "Cash balance")}</b><small>${L("Liquidität auf dem Konto", "Cash on the account")}</small></span></div></td>
-      <td class="num">–</td><td class="num">–</td><td class="num">–</td>
+      <td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td>
       <td class="num"><b>${amt(h.value)}</b></td><td class="num">–</td>
       <td class="num">${h.value > 0 ? num(h.weight, 1) + " %" : "–"}</td></tr>`;
     const gcls = h.gain > 0 ? "up" : h.gain < 0 ? "down" : "";
+    const c24 = closed || h.change_24h == null ? null : h.change_24h;
+    const c24cls = c24 > 0 ? "up" : c24 < 0 ? "down" : "";
+    const c24tip = L("Kursveränderung gegenüber dem Vortag (in Kurswährung)", "Price change vs. previous day (in quote currency)");
     const src = h.price_source === "live" ? "" : `<div class="src-tag ${h.price_source === "letzter Kauf" ? "warn" : ""}">${esc(priceSource(h.price_source))}</div>`;
     return `<tr data-sym="${esc(h.symbol)}" style="${closed ? "opacity:.55" : ""}">
       <td><div class="asset"><span class="badge" style="background:${colorOf(h)}" title="${esc(titleOf(h))}">${esc(badgeText(h))}</span>
@@ -430,6 +433,7 @@ function renderHoldings(s) {
       <td class="num">${closed ? L("geschlossen", "closed") : qtyS(h.quantity)}</td>
       <td class="num">${h.avg_price ? money(h.avg_price, h.avg_ccy) : "–"}</td>
       <td class="num">${h.price ? money(h.price, h.price_ccy) : "–"}${src}</td>
+      <td class="num ${c24cls}" title="${esc(c24tip)}">${c24 == null ? "–" : (c24 > 0 ? "▲ " : c24 < 0 ? "▼ " : "") + pct(c24)}</td>
       <td class="num"><b>${amt(h.value)}</b></td>
       <td class="num ${gcls}">${closed ? "–" : signed(h.gain)}<div class="src-tag">${closed ? "" : pct(h.gain_pct)}</div></td>
       <td class="num">${closed ? "–" : num(h.weight, 1) + " %"}</td>

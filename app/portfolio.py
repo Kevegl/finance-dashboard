@@ -1,4 +1,5 @@
 """Portfolio-Berechnung: Bestände, Kostenbasis (Durchschnittskosten), Erträge, Kontoguthaben, Historie."""
+import bisect
 from datetime import date, datetime, timedelta
 
 import config
@@ -17,6 +18,30 @@ def cash_effect(t, amount):
     if t["type"] == "withdrawal":
         return -abs(amount)
     return amount            # deposit (+), transfer (±), dividend, interest (+), tax, fee (−)
+
+
+def change_24h(s, today=None):
+    """Kursveränderung in % gegenüber dem letzten Kurs vor dem Tag des aktuellen Kurses (Vortagesschluss).
+
+    Liefert None ohne Vergleichskurs oder wenn der letzte Kurs veraltet ist (älter als 3 Tage)."""
+    if not s or len(s.d) < 2:
+        return None
+    today = today or date.today()
+    try:
+        last_day = datetime.strptime(s.d[-1], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    if last_day < today - timedelta(days=3):
+        return None
+    ref_day = (last_day - timedelta(days=1)).isoformat()
+    k = bisect.bisect_right(s.d, ref_day) - 1
+    if k < 0:
+        return None
+    ref, cur = s.v[k], s.v[-1]
+    if not ref or cur is None:
+        return None
+    return (cur - ref) / ref * 100
+
 
 def compute_summary(pid):
     with db_tx() as con:
@@ -114,11 +139,12 @@ def compute_summary(pid):
     holdings = []
     for sym, p in pos.items():
         a = assets.get(sym, {})
-        price, ccy, price_src = None, None, "—"
+        price, ccy, price_src, chg = None, None, "—", None
         if a.get("manual_price"):
             price, ccy, price_src = a["manual_price"], p["last_tx_ccy"] or config.BASE, "manuell"
         elif sym in price_series:
             price, ccy, price_src = price_series[sym].last(), price_ccy[sym], "live"
+            chg = change_24h(price_series[sym])
         elif p["last_tx_price"]:
             price, ccy, price_src = p["last_tx_price"], p["last_tx_ccy"], "letzter Kauf"
         rate = fx_rate(ccy) if ccy else None
@@ -129,6 +155,7 @@ def compute_summary(pid):
             news_query=a.get("news_query") or "",
             quantity=p["qty"], cost=p["cost"], avg_price=(p["cost_ccy"] / p["qty"]) if p["qty"] else None,
             avg_ccy=p["last_tx_ccy"], price=price, price_ccy=ccy, price_source=price_src,
+            change_24h=chg if p["qty"] else None,
             price_error=meta.get(a.get("ticker", ""), {}).get("error"),
             value=value, gain=value - p["cost"] if p["qty"] else 0.0,
             gain_pct=((value - p["cost"]) / p["cost"] * 100) if p["cost"] > 0 and p["qty"] else None,
@@ -159,7 +186,7 @@ def compute_summary(pid):
                      sources=[])
             holdings.append(h)
         h.update(name="Kontoguthaben", asset_class="cash", quantity=cash if abs(cash) >= 0.005 else 0.0,
-                 price=1.0, price_ccy=config.BASE, price_source="Konto", value=cash, cost=cash, gain=0.0, gain_pct=None,
+                 price=1.0, price_ccy=config.BASE, price_source="Konto", change_24h=None, value=cash, cost=cash, gain=0.0, gain_pct=None,
                  avg_price=1.0, avg_ccy=config.BASE, is_cash=True)
     holdings.sort(key=lambda h: -h["value"])
     total_value = sum(h["value"] for h in holdings)

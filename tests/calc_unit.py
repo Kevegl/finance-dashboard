@@ -163,6 +163,21 @@ class Summary(unittest.TestCase):
             prices.needed_tickers(con)                       # darf nicht mehr abbrechen
 
 
+class Change24h(unittest.TestCase):
+    def test_change(self):
+        from datetime import date
+        S = prices.Series
+        today = date(2026, 11, 20)
+        s = S([("2026-11-18", 100.0), ("2026-11-19", 110.0), ("2026-11-20", 99.0)])
+        self.assertAlmostEqual(portfolio.change_24h(s, today), -10.0)
+        # Wochenende: Vergleich mit dem letzten Kurs vor dem Tag des aktuellen Kurses
+        s = S([("2026-11-13", 100.0), ("2026-11-16", 105.0)])
+        self.assertAlmostEqual(portfolio.change_24h(s, date(2026, 11, 16)), 5.0)
+        self.assertIsNone(portfolio.change_24h(S([("2026-11-20", 99.0)]), today))
+        self.assertIsNone(portfolio.change_24h(S([("2026-11-01", 1.0), ("2026-11-02", 2.0)]), today))
+        self.assertIsNone(portfolio.change_24h(S([("2026-11-19", 0.0), ("2026-11-20", 2.0)]), today))
+
+
 class SetupCode(unittest.TestCase):
     """Ersteinrichtung nur mit Einrichtungscode, und nur einmal – auch bei gleichzeitigen Anfragen."""
 
