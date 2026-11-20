@@ -182,6 +182,13 @@ class Launcher:
         return self.child
 
     # ---------- Passwort vergessen (Statusfenster)
+    # Bestätigungswort für «Neu beginnen»: ohne Umlaut, damit es auf jeder Tastatur geht; die anderen werden auch angenommen
+    WIPE_WORDS = ("ENTFERNEN", "DELETE", "LOESCHEN", "LÖSCHEN")
+
+    @classmethod
+    def wipe_confirmed(cls, answer):
+        return (answer or "").strip().upper() in cls.WIPE_WORDS
+
     DATA_FILES = ("finance.db", "finance.db-wal", "finance.db-shm", "finance.db-journal", "setup-code.txt")
 
     def open_recovery(self):

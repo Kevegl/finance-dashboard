@@ -3,6 +3,15 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.1.5
+
+### Verbessert
+- *Neu beginnen – alle Daten löschen* im Statusfenster bestätigst du jetzt mit `ENTFERNEN`, ohne Umlaut, also auf
+  jeder Tastatur leicht zu tippen. `LÖSCHEN`, `LOESCHEN` und `DELETE` werden ebenfalls angenommen, Gross- und
+  Kleinschreibung spielt keine Rolle.
+
+*English:* “Start over” in the status window is now confirmed by typing `DELETE` (German: `ENTFERNEN`, no umlaut).
+
 ## 1.1.4
 
 ### Behoben

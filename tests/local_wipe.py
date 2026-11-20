@@ -28,6 +28,11 @@ def main():
     opened = []
     L.webbrowser.open = lambda url: opened.append(url)
     lau = L.Launcher()
+    for word in ("ENTFERNEN", "entfernen", " Entfernen ", "DELETE", "loeschen", "LÖSCHEN"):
+        assert lau.wipe_confirmed(word), word
+    for word in (None, "", "ja", "OK", "entferne", "LOSCHEN"):
+        assert not lau.wipe_confirmed(word), word
+    print("✓ Bestätigung «Neu beginnen» mit ENTFERNEN (ohne Umlaut) bzw. DELETE/LÖSCHEN", flush=True)
     assert lau.prepare(False) is None
     result = []
     worker = threading.Thread(target=lambda: result.append(lau.supervise(False)), daemon=True)

@@ -28,7 +28,7 @@ TEXT = {
         "fg_wipe_btn": "Neu beginnen – alle Daten löschen …",
         "cancel": "Abbrechen",
         "wipe_prompt": "Alle Daten werden endgültig gelöscht. Das lässt sich nicht rückgängig machen.\n\n"
-                       "Zum Bestätigen LÖSCHEN eingeben:",
+                       "Zum Bestätigen ENTFERNEN eingeben:",
         "wipe_wrong": "Nicht bestätigt – es wurde nichts gelöscht.",
     },
     "en": {
@@ -155,7 +155,7 @@ class StatusWindow:
 
         def wipe():
             answer = simpledialog.askstring(self.t("fg_wipe_btn"), self.t("wipe_prompt"), parent=dlg)
-            if (answer or "").strip().upper() not in ("LÖSCHEN", "LOESCHEN", "DELETE"):
+            if not self.l.wipe_confirmed(answer):
                 if answer is not None:
                     messagebox.showinfo(self.t("fg_title"), self.t("wipe_wrong"), parent=dlg)
                 return

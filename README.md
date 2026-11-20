@@ -140,7 +140,7 @@ update is available.
 page choose *Forgot password?*, or in the **status window** click *Forgot password …* → *With recovery code …*.
 
 Without a recovery code you can only **start over**: status window → *Forgot password …* → *Start over – delete all
-data …* and confirm by typing `DELETE` (German: `LÖSCHEN`). All portfolios, transactions and settings are deleted
+data …* and confirm by typing `DELETE` (German: `ENTFERNEN`). All portfolios, transactions and settings are deleted
 permanently and an empty dashboard starts. This way nobody who sits at your unlocked computer can open your data with
 a password of their own.
 

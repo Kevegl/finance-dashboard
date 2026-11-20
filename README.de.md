@@ -140,7 +140,7 @@ zeigt an, dass ein Update bereitliegt.
 *Passwort vergessen …* → *Mit Wiederherstellungscode …*.
 
 Ohne Wiederherstellungscode bleibt nur ein **Neubeginn**: Statusfenster → *Passwort vergessen …* → *Neu beginnen –
-alle Daten löschen …* und mit `LÖSCHEN` bestätigen. Alle Portfolios, Transaktionen und Einstellungen werden endgültig
+alle Daten löschen …* und mit `ENTFERNEN` bestätigen. Alle Portfolios, Transaktionen und Einstellungen werden endgültig
 gelöscht, danach startet ein leeres Dashboard. So kann niemand, der an deinem entsperrten Computer sitzt, deine Daten
 mit einem eigenen Passwort öffnen.
 
