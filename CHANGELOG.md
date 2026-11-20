@@ -3,6 +3,17 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.2.0
+
+### Neu
+- **Kursveränderung der letzten 24 Stunden:** Die Positionstabelle hat eine neue Spalte *24h*. Sie zeigt für jede
+  Position mit Live-Kurs die Veränderung gegenüber dem Vortag in Prozent (z.B. ▼ −1.25 %), grün bei Gewinn, rot bei
+  Verlust, gerechnet in der Kurswährung. Bei manuellen Kursen, Positionen ohne Ticker, geschlossenen Positionen und
+  veralteten Kursen (älter als 3 Tage) bleibt das Feld leer.
+
+*English:* The holdings table has a new *24h* column showing each position's price change versus the previous day in
+percent (in the quote currency); empty for manual prices, positions without a ticker, closed positions and stale prices.
+
 ## 1.1.5
 
 ### Verbessert
