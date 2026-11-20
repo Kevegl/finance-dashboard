@@ -20,6 +20,12 @@ Sprache im Projekt: Deutsch (Schweizer Schreibweise, „ss“ statt „ß“), U
   veröffentlichte Releases: Tag `vX.Y.Z` muss zu `app/VERSION` passen. Releases nur auf ausdrücklichen Wunsch des
   Benutzers: annotierter Tag `vX.Y.Z` (Nachricht = Release-Notizen) pushen oder Release auf GitHub veröffentlichen;
   `.github/workflows/release.yml` legt das Release an und baut Docker-Image, .exe und Mac-App.
+- Versionsnummer `Major.Minor.Patch` (Semantic Versioning), ausgehend von der letzten veröffentlichten Version:
+  **Patch** (1.2.0 → 1.2.1) für Fehlerbehebungen, Sicherheits- und kleine Verbesserungen ohne neue Funktion;
+  **Minor** (1.2.x → 1.3.0) sobald eine neue Funktion dabei ist (Patch-Stelle auf 0);
+  **Major** (1.x → 2.0.0) nur bei Brüchen, z.B. Rollback mit derselben Datenbank nicht mehr möglich oder manuelle
+  Schritte bei der Installation nötig – möglichst vermeiden. Mehrere Änderungen bis zum nächsten Release teilen sich
+  eine Nummer (die höchste nötige Stufe), `app/VERSION` und CHANGELOG-Abschnitt werden dann nur angepasst.
 
 ## Datenschutz – das Repo soll später öffentlich werden
 - Niemals echte Finanzdaten committen: keine eigenen CSV/PDF-Exporte, Datenbank, Sicherungs-JSONs, Kontonummern,

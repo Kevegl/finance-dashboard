@@ -415,7 +415,11 @@ Startskripte und des Docker-Images.
 
 ### Neue Version veröffentlichen
 
-1. Die Versionsnummer in `app/VERSION` erhöhen, z.B. auf `1.1.0`, committen und pushen.
+1. Die Versionsnummer in `app/VERSION` erhöhen, z.B. auf `1.1.0`, committen und pushen. Schema
+   `Major.Minor.Patch`: **Patch** (`1.2.0` → `1.2.1`) für Fehlerbehebungen und kleine Verbesserungen,
+   **Minor** (`1.2.1` → `1.3.0`) sobald eine neue Funktion dabei ist, **Major** (`1.x` → `2.0.0`) nur bei Brüchen,
+   etwa wenn die Rückkehr zur vorherigen Version mit derselben Datenbank nicht mehr geht. Für Updates zählt nur,
+   dass die Nummer grösser ist.
 2. Auf GitHub unter *Releases → Draft a new release* den Tag `v1.1.0` anlegen (muss zu `app/VERSION` passen),
    Änderungen kurz beschreiben und auf *Publish release* klicken.
    Alternativ im Terminal: `git tag -a v1.1.0 -m "Änderungen …" && git push origin v1.1.0`. Die Tag-Nachricht
