@@ -134,7 +134,7 @@ def version_info(version, date=None, subject=None):
     if not version:
         return None
     return {"commit": version, "short": "v" + version, "date": date,
-            "subject": subject or f"Version {version}"}
+            "subject": subject or f"Version {version}", "version": version}
 
 
 # ---------------------------------------------------------------- HTTPS (mit Windows-Zertifikatsergänzung)

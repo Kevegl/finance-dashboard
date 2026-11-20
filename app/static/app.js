@@ -1306,6 +1306,25 @@ function updWaiting() {
   if (!upd.rid) return false;
   return !st || st.pending || st.busy || st.request_id !== upd.rid;
 }
+function verGt(a, b) {
+  const pa = String(a || "").split(".").map(Number), pb = String(b || "").split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+/* Kurzbeschreibung des verfügbaren Updates: «Version 1.2.0 verfügbar» + Anzahl Änderungen bzw. Versionen */
+function updSummary(st) {
+  const n = st.behind || 0, rel = st.mode === "release" || st.mode === "docker";
+  const cv = (st.current || {}).version, rv = (st.remote || {}).version;
+  const changes = rel ? (n > 1 ? L(`${n} neue Versionen`, `${n} new versions`) : "")
+    : L(`${n} ${n === 1 ? "Änderung" : "Änderungen"}`, `${n} ${n === 1 ? "change" : "changes"}`);
+  if (rv && (!cv || verGt(rv, cv))) return { head: L(`Version ${rv} verfügbar`, `Version ${rv} available`), sub: changes };
+  if (rel) return { head: L(`${n} ${n === 1 ? "neue Version" : "neue Versionen"} verfügbar`, `${n} new ${n === 1 ? "version" : "versions"} available`), sub: "" };
+  return { head: L(`${n} ${n === 1 ? "neue Änderung" : "neue Änderungen"} verfügbar`, `${n} new ${n === 1 ? "change" : "changes"} available`),
+    sub: cv ? L(`ohne neue Versionsnummer (bleibt ${cv})`, `no new version number (stays ${cv})`) : "" };
+}
 function renderUpdate() {
   const st = upd.st || {};
   $("#updDot").hidden = !(st.available && st.behind > 0);
@@ -1314,16 +1333,22 @@ function renderUpdate() {
   $("#updBody").hidden = !st.available;
   if (!st.available) return;
   const cur = st.current;
-  $("#updCurrent").innerHTML = cur
-    ? `<code>${esc(cur.short)}</code> ${esc(cur.subject)}<small>${esc([cur.date && updDate(cur.date), st.branch].filter(Boolean).join(" · "))}</small>`
-    : "–";
+  const curMeta = `<small>${esc([cur && cur.date && updDate(cur.date), st.branch].filter(Boolean).join(" · "))}</small>`;
+  const curGit = cur && cur.short && !/^v\d/.test(cur.short);       // Proxmox: Stand ist ein Commit
+  $("#updCurrent").innerHTML = !cur ? "–"
+    : cur.version ? `<b>${esc(L("Version ", "Version ") + cur.version)}</b>`
+      + (curGit ? `<small><code>${esc(cur.short)}</code> ${esc(cur.subject)}</small>` : "") + curMeta
+    : `<code>${esc(cur.short)}</code> ${esc(cur.subject)}${curMeta}`;
   const waiting = updWaiting(), busy = waiting || st.busy;
   const busyText = { check: L("Suche nach Updates …", "Checking for updates …"), update: L("Update wird installiert – das Dashboard startet gleich neu …", "Installing update – the dashboard will restart shortly …"),
     rollback: L("Vorherige Version wird wiederhergestellt …", "Restoring previous version …") }[upd.action || st.action] || L("Bitte warten …", "Please wait …");
   let html, cls = "";
   if (busy) html = `<span class="spin"></span>${esc(busyText)}`;
   else if (st.state === "error") { cls = "err"; html = esc(L("Fehler: ", "Error: ") + trErr(st.message || "")); }
-  else if (st.behind > 0) { cls = "new"; html = esc(L(`${st.behind} ${st.behind === 1 ? "neue Version" : "neue Versionen"} verfügbar`, `${st.behind} new ${st.behind === 1 ? "version" : "versions"} available`)); }
+  else if (st.behind > 0) {
+    cls = "new"; const u = updSummary(st);
+    html = esc(u.head) + (u.sub ? `<small>${esc(u.sub)}</small>` : "");
+  }
   else if (st.current && st.last_check) { cls = "ok"; html = esc(L("Auf dem neuesten Stand", "Up to date")); }
   else html = esc(L("Noch nicht geprüft", "Not checked yet"));
   if (!busy && st.last_check) html += `<small>${esc(L("Zuletzt geprüft: ", "Last checked: ") + updDate(st.last_check))}</small>`;
@@ -1376,8 +1401,9 @@ $("#btnUpdCheck").onclick = () => updRequest("check");
 $("#btnUpdInstall").onclick = async () => {
   const st = upd.st || {};
   if (!(await confirmDialog(L("Update jetzt installieren?", "Install update now?"),
-    L(`${st.behind} neue ${st.behind === 1 ? "Version" : "Versionen"}. Das Dashboard ist während des Updates kurz nicht erreichbar (meist unter einer Minute). Deine Daten bleiben unverändert.`,
-      `${st.behind} new ${st.behind === 1 ? "version" : "versions"}. The dashboard will be briefly unavailable during the update (usually under a minute). Your data stays unchanged.`),
+    (() => { const u = updSummary(st); return u.head.replace(/ (verfügbar|available)$/, "") + (u.sub ? ` (${u.sub})` : "") + ". "; })()
+      + L("Das Dashboard ist während des Updates kurz nicht erreichbar (meist unter einer Minute). Deine Daten bleiben unverändert.",
+        "The dashboard will be briefly unavailable during the update (usually under a minute). Your data stays unchanged."),
     L("Aktualisieren", "Update")))) return;
   updRequest("update");
 };

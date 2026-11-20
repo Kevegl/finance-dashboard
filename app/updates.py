@@ -99,6 +99,8 @@ def update_status():
     except (OSError, ValueError):
         st = {}
     st["available"] = True
+    if isinstance(st.get("current"), dict) and not st["current"].get("version"):
+        st["current"]["version"] = APP_VERSION      # Status eines älteren Update-Dienstes ohne Versionsnummer
     st["pending"] = (DATA_DIR / "update-request").exists()
     st["busy"] = st.get("state") in ("checking", "updating", "rolling_back")
     if st.get("updated_at") and st["busy"]:
