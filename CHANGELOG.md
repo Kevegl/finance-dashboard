@@ -3,6 +3,17 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.2.1
+
+### Verbessert
+- **Updates zeigen die Versionsnummer:** Unter *Einstellungen → Updates* steht bei der installierten Version jetzt
+  «Version 1.2.0» statt nur der Commit-Nachricht, und der Status lautet z.B. «Version 1.2.1 verfügbar · 3 Änderungen»
+  statt «3 neue Versionen verfügbar». Änderungen ohne neue Versionsnummer (z.B. nur Dokumentation) erscheinen als
+  «neue Änderungen». Die Liste der einzelnen Änderungen bleibt darunter sichtbar.
+
+*English:* *Settings → Updates* now shows the version number (e.g. “Version 1.2.1 available · 3 changes”) instead of
+counting every change as a new version.
+
 ## 1.2.0
 
 ### Neu
