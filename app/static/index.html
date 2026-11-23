@@ -55,11 +55,13 @@
     <p class="err" id="authErr" hidden></p>
     <button class="btn primary wide" id="authSubmit" type="submit">Anmelden</button>
     <button class="btn ghost wide" id="authForgot" type="button">Passwort vergessen?</button>
+    <button class="btn ghost wide" id="authRegister" type="button" hidden>Neues Konto erstellen</button>
   </form>
   <form class="auth-card" id="recForm" novalidate hidden>
     <span class="logo big" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17l5-5 4 3 7-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
     <h2>Passwort vergessen?</h2>
-    <p class="hint">Gib den Wiederherstellungscode ein, den du bei der Einrichtung erhalten hast, und lege ein neues Passwort fest. Eine Zwei-Faktor-Anmeldung wird dabei ausgeschaltet.</p>
+    <p class="hint">Gib deinen Benutzernamen und den Wiederherstellungscode ein, den du bei der Einrichtung bzw. Registrierung erhalten hast, und lege ein neues Passwort fest. Eine Zwei-Faktor-Anmeldung wird dabei ausgeschaltet.</p>
+    <label class="field">Benutzername<input name="username" autocomplete="username"></label>
     <label class="field">Wiederherstellungscode<input name="rcode" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" required></label>
     <label class="field">Neues Passwort<input name="password" type="password" autocomplete="new-password" required></label>
     <label class="field">Neues Passwort wiederholen<input name="password2" type="password" autocomplete="new-password" required></label>
@@ -230,6 +232,13 @@
       <p class="err full" id="accErr" hidden></p>
       <div class="form-actions"><button class="btn primary" type="submit">Änderungen speichern</button></div>
     </form>
+  </article>
+
+  <article class="card settings-card" id="usersCard" hidden>
+    <h3>Benutzer</h3>
+    <p class="hint">Jeder Benutzer hat sein eigenes Dashboard mit eigenen Portfolios, Transaktionen und Einstellungen und sieht nur seine Daten. Als Administrator verwaltest du hier die Benutzer und installierst Updates.</p>
+    <label class="check full"><input type="checkbox" id="setRegistration"> <span>Neue Benutzer dürfen sich auf der Anmeldeseite registrieren</span></label>
+    <div class="pf-list" id="userList"></div>
   </article>
 
   <article class="card settings-card">

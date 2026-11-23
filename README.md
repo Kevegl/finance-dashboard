@@ -361,6 +361,21 @@ The profile is stored on the server (in the database, so it is part of the backu
 (federal tax per the official 2026 tariff, cantonal tax simplified) and are not advice. Further cantons can be added
 in `app/static/plan.js` (`CANTONS`, `DEADLINES`, `TIPS` with `canton`).
 
+## Multiple users
+
+Several people can use the same installation, each with their own dashboard: their own portfolios, transactions,
+settings, savings profile and sign-in (password, two-factor, recovery code). Nobody sees the data of anyone else.
+
+- **Sign up:** on the sign-in page click *Create a new account*, choose a username and password and save the recovery
+  code shown afterwards. The new dashboard starts empty.
+- **Administrator:** the user created during the initial setup. Only the administrator sees *Settings → Users*: a list
+  of all users, *Delete* (removes the account with all its data) and the switch *New users may sign up on the sign-in
+  page* (on by default; switch it off once everyone has an account). Updates are installed only by the administrator.
+- Each user has a separate database: the administrator's stays `finance.db`, further users get `users/u<number>.db`
+  in the data folder. Backups (*Download backup*) contain only the data of the signed-in user.
+- **Forgot password?** Enter your username and recovery code. `--reset-password` resets only the administrator's sign-in.
+- At most 3 new accounts per hour and address can be created.
+
 ## Language & news ticker
 
 - **Language:** German or English under *Settings → General*. Applies to the whole dashboard and the news.
@@ -396,6 +411,7 @@ with a sample file containing made-up values.
 cd app && python3 server.py      # server mode, http://localhost:8080, data in data/
 python3 app/launcher.py          # local mode as with a double-click, http://127.0.0.1:8765
 python3 tests/smoke_server.py    # quick test of server mode incl. import of all sample CSVs
+python3 tests/multi_user.py      # several users: sign-up, separate data, administrator rights, deleting a user
 python3 tests/calc_unit.py       # unit tests: numbers, dates, calculation, login lockout, setup code
 python3 tests/update_verify.py   # signature check of the update service (git + ssh-keygen)
 python3 tests/smoke_local.py     # quick test of local mode (start, sign-in, second instance, quit)
@@ -411,7 +427,7 @@ The folder `beispiel-csv/` contains test files for all formats (made-up values).
 | `config.py` | Environment variables and constants; `config.BASE` = current base currency |
 | `store.py` | SQLite: `db_tx()` (transaction, closes the connection), schema/migrations, settings, backup |
 | `validate.py` | Validation of date, numbers and type of a transaction |
-| `auth.py` | Password hash, sessions, two-factor, recovery code, sign-in log |
+| `auth.py` | Password hash, sessions, users (sign-up, administrator), two-factor, recovery code, sign-in log |
 | `portfolio.py` | Calculation: holdings, cost basis, income, history |
 | `prices.py`, `news.py`, `muni.py` | Prices/exchange rates, news ticker, municipal tax rates (external requests) |
 | `importers.py`, `uploads.py` | Provider CSV formats, PDF/ZIP upload |

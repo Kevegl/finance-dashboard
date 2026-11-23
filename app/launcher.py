@@ -26,6 +26,7 @@ if sys.version_info < (3, 10):
 import json
 import runpy
 import signal
+import shutil
 import socket
 import subprocess
 import threading
@@ -207,7 +208,7 @@ class Launcher:
         return True
 
     def wipe_data(self):
-        """Löscht die Datenbank. Gibt True zurück, wenn alles weg ist (sonst bleibt das Dashboard beendet)."""
+        """Löscht die Datenbank (inkl. der Datenbanken weiterer Benutzer). Gibt True zurück, wenn alles weg ist (sonst bleibt das Dashboard beendet)."""
         left = []
         for name in self.DATA_FILES:
             f = self.data / name
@@ -219,6 +220,11 @@ class Launcher:
                     time.sleep(0.25)
             if f.exists():
                 left.append(name)
+        users = self.data / "users"                      # Datenbanken weiterer Benutzer
+        if users.is_dir():
+            shutil.rmtree(users, ignore_errors=True)
+            if users.exists():
+                left.append("users")
         for name in ("server.log", "server.log.1"):       # Protokoll des Servers (vom beendeten Kindprozess)
             try:
                 (lu.local_dir(self.data) / name).unlink(missing_ok=True)

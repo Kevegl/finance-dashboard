@@ -30,6 +30,8 @@ jobs:
         run: python tests/update_verify.py
       - name: Server-Modus mit Beispiel-CSV
         run: python tests/smoke_server.py
+      - name: Mehrere Benutzer (Registrierung, getrennte Daten)
+        run: python tests/multi_user.py
       - name: Windows-Zertifikate neu einlesen (Regressionstest)
         run: python tests/cert_refresh.py
       - name: QR-Code-Generator (Rundlauf mit OpenCV, nur zum Testen installiert)

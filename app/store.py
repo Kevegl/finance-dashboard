@@ -1,4 +1,8 @@
-"""SQLite-Datenbank: Verbindungen, Schema (init_db, nur additive Migrationen), Einstellungen, Sicherung."""
+"""SQLite-Datenbank: Verbindungen, Schema (init_db, nur additive Migrationen), Einstellungen, Sicherung.
+
+Mehrere Benutzer: Jeder Benutzer hat eine eigene Datenbank. finance.db gehört dem Administrator (dem bei der
+Ersteinrichtung angelegten Benutzer, uid 0) und enthält zusätzlich die Benutzerliste und alle Sitzungen; weitere
+Benutzer liegen in users/u<id>.db. use_user()/user_context() wählen die Datenbank für den aktuellen Thread."""
 import hashlib
 import json
 import sqlite3
@@ -7,7 +11,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 
 import config
-from config import CURRENCIES, DATA_DIR, DB_PATH, LANGS
+from config import CTX, CURRENCIES, DATA_DIR, DB_PATH, LANGS, USERS_DIR
 
 DB_LOCK = threading.RLock()
 
@@ -23,20 +27,66 @@ EXCH_SUFFIX = {
 # Datenbank
 # --------------------------------------------------------------------------
 
-def connect():
-    """Neue Verbindung. Lieber db_tx() verwenden – das schliesst die Verbindung wieder."""
-    con = sqlite3.connect(DB_PATH, timeout=10)
+def user_db_path(uid):
+    """Datenbank eines Benutzers: uid 0 = Administrator (finance.db), sonst users/u<uid>.db."""
+    uid = int(uid or 0)
+    return DB_PATH if uid == 0 else USERS_DIR / f"u{uid}.db"
+
+
+def current_uid():
+    return getattr(CTX, "uid", 0) or 0
+
+
+def current_db():
+    return getattr(CTX, "db", None) or DB_PATH
+
+
+def use_user(uid):
+    """Wählt für den aktuellen Thread die Datenbank des Benutzers (inkl. dessen Basiswährung)."""
+    uid = int(uid or 0)
+    CTX.uid, CTX.db, CTX.base = uid, user_db_path(uid), None
+    b = get_setting("base_ccy") if uid == 0 or CTX.db.is_file() else None   # neue Datenbank: noch nichts gespeichert
+    CTX.base = b if b in CURRENCIES else (config.BASE_DEFAULT if uid else None)
+
+
+@contextmanager
+def user_context(uid):
+    """Vorübergehend als anderer Benutzer arbeiten (z.B. Hintergrund-Aktualisierung aller Benutzer)."""
+    old = (getattr(CTX, "uid", None), getattr(CTX, "db", None), getattr(CTX, "base", None))
+    use_user(uid)
+    try:
+        yield
+    finally:
+        CTX.uid, CTX.db, CTX.base = old
+
+
+def spawn(fn, *args):
+    """Startet fn in einem Hintergrund-Thread mit der Datenbank des aktuellen Benutzers."""
+    uid = current_uid()
+
+    def run():
+        use_user(uid)
+        fn(*args)
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    return t
+
+
+def connect(main=False):
+    """Neue Verbindung zur Datenbank des aktuellen Benutzers (main=True: Hauptdatenbank mit Benutzern/Sitzungen).
+    Lieber db_tx() verwenden – das schliesst die Verbindung wieder."""
+    con = sqlite3.connect(DB_PATH if main else current_db(), timeout=10)
     con.row_factory = sqlite3.Row
     return con
 
 
 @contextmanager
-def db_tx():
+def db_tx(main=False):
     """Eine Datenbank-Transaktion: committet bei Erfolg, rollt bei Fehlern zurück und schliesst die Verbindung.
     (sqlite3-Verbindungen als Kontextmanager schliessen sich nicht selbst – früher blieb jede offen, bis der
     Garbage Collector sie aufräumte.) DB_LOCK serialisiert Schreib- und Lesezugriffe innerhalb des Prozesses."""
     with DB_LOCK:
-        con = connect()
+        con = connect(main)
         try:
             with con:
                 yield con
@@ -44,14 +94,14 @@ def db_tx():
             con.close()
 
 
-def get_setting(key, default=None):
-    with db_tx() as con:
+def get_setting(key, default=None, main=False):
+    with db_tx(main) as con:
         r = con.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
     return r[0] if r else default
 
 
-def set_setting(key, value):
-    with db_tx() as con:
+def set_setting(key, value, main=False):
+    with db_tx(main) as con:
         if value is None:
             con.execute("DELETE FROM settings WHERE key=?", (key,))
         else:
@@ -134,7 +184,11 @@ def restore_backup(data):
 
 
 def init_db():
+    """Legt die Datenbank des aktuellen Benutzers an bzw. migriert sie (nur additiv)."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    is_main = current_db() == DB_PATH
+    if not is_main:
+        USERS_DIR.mkdir(parents=True, exist_ok=True)
     with db_tx() as con:
         con.executescript("""
         CREATE TABLE IF NOT EXISTS transactions (
@@ -191,6 +245,18 @@ def init_db():
             DROP TABLE transactions_old;
             """)
         con.execute("CREATE INDEX IF NOT EXISTS ix_tx_pf ON transactions(portfolio_id, date)")
+        if is_main:
+            # Weitere Benutzer (eigene Datenbank users/u<id>.db) und deren Sitzungen. Die Sitzungen des Administrators
+            # bleiben in «sessions», damit eine ältere Version nach einem Rollback keine fremde Sitzung annimmt.
+            con.executescript("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, name_key TEXT NOT NULL UNIQUE,
+                created REAL
+            );
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                token_hash TEXT PRIMARY KEY, uid INTEGER NOT NULL, created REAL, expires REAL
+            );
+            """)
         if "news_query" not in [r[1] for r in con.execute("PRAGMA table_info(assets)")]:
             con.execute("ALTER TABLE assets ADD COLUMN news_query TEXT DEFAULT ''")
         if "kind" not in [r[1] for r in con.execute("PRAGMA table_info(portfolios)")]:

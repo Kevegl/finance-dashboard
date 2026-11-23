@@ -375,6 +375,7 @@ a.btn { text-decoration: none; }
 .pf-list { display: grid; gap: 4px; margin: 12px 0; }
 .pf-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); }
 .pf-row .pf-name { font-weight: 500; }
+.pf-row.user-row { grid-template-columns: 1fr auto auto; }
 .pf-actions { display: flex; gap: 6px; }
 .pf-add { display: flex; gap: 8px; flex-wrap: wrap; }
 .pf-add input { flex: 1; min-width: 200px; }

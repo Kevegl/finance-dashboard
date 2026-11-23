@@ -350,6 +350,24 @@ Das Profil wird auf dem Server gespeichert (in der Datenbank, also auch in der S
 Näherungen (Bundessteuer nach amtlichem Tarif 2026, Staatssteuer vereinfacht) und ersetzen keine Beratung. Weitere Kantone lassen sich in `app/static/plan.js`
 (`CANTONS`, `DEADLINES`, `TIPS` mit `canton`) ergänzen.
 
+## Mehrere Benutzer
+
+Mehrere Personen können dieselbe Installation nutzen, jede mit ihrem eigenen Dashboard: eigene Portfolios,
+Transaktionen, Einstellungen, Vorsorgeprofil und Anmeldung (Passwort, Zwei-Faktor, Wiederherstellungscode). Niemand
+sieht die Daten der anderen.
+
+- **Registrieren:** Auf der Anmeldeseite *Neues Konto erstellen* wählen, Benutzername und Passwort festlegen und den
+  danach angezeigten Wiederherstellungscode aufbewahren. Das neue Dashboard ist zu Beginn leer.
+- **Administrator:** der Benutzer aus der Ersteinrichtung. Nur er sieht *Einstellungen → Benutzer*: alle Benutzer,
+  *Löschen* (entfernt das Konto mit allen Daten) und den Schalter *Neue Benutzer dürfen sich auf der Anmeldeseite
+  registrieren* (standardmässig an; ausschalten, sobald alle ein Konto haben). Updates installiert nur der Administrator.
+- Jeder Benutzer hat eine eigene Datenbank: die des Administrators bleibt `finance.db`, weitere Benutzer erhalten
+  `users/u<Nummer>.db` im Datenordner. Eine Sicherung (*Sicherung herunterladen*) enthält nur die Daten des
+  angemeldeten Benutzers.
+- **Passwort vergessen?** Benutzername und Wiederherstellungscode eingeben. `--reset-password` setzt nur die Anmeldung
+  des Administrators zurück.
+- Pro Adresse lassen sich höchstens 3 neue Konten pro Stunde erstellen.
+
 ## Sprache & News-Ticker
 
 - **Sprache:** Deutsch oder Englisch unter *Einstellungen → Allgemein*. Gilt für das ganze Dashboard und die News.
@@ -384,6 +402,7 @@ ebenfalls gern als Issue, am besten mit einer Beispieldatei mit erfundenen Werte
 cd app && python3 server.py      # Server-Modus, http://localhost:8080, Daten in data/
 python3 app/launcher.py          # lokaler Betrieb wie beim Doppelklick, http://127.0.0.1:8765
 python3 tests/smoke_server.py    # Kurztest Server-Modus inkl. Import aller Beispiel-CSVs
+python3 tests/multi_user.py      # mehrere Benutzer: Registrierung, getrennte Daten, Administrator, Löschen
 python3 tests/calc_unit.py       # Unit-Tests: Zahlen, Daten, Berechnung, Login-Sperre, Einrichtungscode
 python3 tests/update_verify.py   # Signaturprüfung des Update-Dienstes (git + ssh-keygen)
 python3 tests/smoke_local.py     # Kurztest lokaler Betrieb (Start, Anmeldung, zweite Instanz, Beenden)
@@ -399,7 +418,7 @@ Im Ordner `beispiel-csv/` liegen Testdateien für alle Formate (erfundene Werte)
 | `config.py` | Umgebungsvariablen und Konstanten; `config.BASE` = aktuelle Basiswährung |
 | `store.py` | SQLite: `db_tx()` (Transaktion, schliesst die Verbindung), Schema/Migrationen, Einstellungen, Sicherung |
 | `validate.py` | Prüfung von Datum, Zahlen und Typ einer Transaktion |
-| `auth.py` | Passwort-Hash, Sitzungen, Zwei-Faktor, Wiederherstellungscode, Anmeldeprotokoll |
+| `auth.py` | Passwort-Hash, Sitzungen, Benutzer (Registrierung, Administrator), Zwei-Faktor, Wiederherstellungscode, Anmeldeprotokoll |
 | `portfolio.py` | Berechnung: Bestände, Kostenbasis, Erträge, Historie |
 | `prices.py`, `news.py`, `muni.py` | Kurse/Wechselkurse, News-Ticker, Gemeindesteuerfüsse (externe Abfragen) |
 | `importers.py`, `uploads.py` | CSV-Formate der Anbieter, PDF-/ZIP-Upload |

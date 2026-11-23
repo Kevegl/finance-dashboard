@@ -1,6 +1,9 @@
 """Einstellungen aus Umgebungsvariablen und Konstanten. config.BASE ist die aktuelle Basiswährung
 (beim Start aus der Datenbank gelesen, in den Einstellungen änderbar) – immer als config.BASE lesen."""
 import os
+import sys
+import threading
+import types
 from pathlib import Path
 
 import local_update
@@ -13,7 +16,8 @@ HERE = Path(__file__).resolve().parent
 STATIC = HERE / "static"
 DATA_DIR = Path(os.environ.get("FD_DATA_DIR", HERE.parent / "data"))
 DB_PATH = DATA_DIR / "finance.db"
-BASE = os.environ.get("FD_BASE_CCY", "CHF").upper()   # Startwert; in den Einstellungen änderbar
+BASE_DEFAULT = os.environ.get("FD_BASE_CCY", "CHF").upper()   # Startwert; in den Einstellungen änderbar
+USERS_DIR = DATA_DIR / "users"          # Datenbanken weiterer Benutzer (u<id>.db); finance.db gehört dem Administrator
 CURRENCIES = ["CHF", "EUR", "USD", "GBP", "JPY", "CAD", "AUD", "SEK", "NOK", "DKK", "PLN", "CZK", "HKD", "SGD"]
 SESSION_DAYS = 30
 COOKIE = "fd_session"
@@ -36,3 +40,27 @@ MAX_BODY = 100 * 1024 * 1024
 
 # --- News (Google News RSS, serverseitig abgerufen und zwischengespeichert)
 LANGS = ("de", "en")
+
+
+# --- Mehrere Benutzer: jeder Benutzer hat eine eigene Datenbank. CTX hält pro Thread (= pro Anfrage) den aktuellen
+# Benutzer (uid, db) und dessen Basiswährung (base). Ohne CTX (Start, Hintergrund) gilt die Hauptdatenbank.
+CTX = threading.local()
+_BASE = {"main": BASE_DEFAULT}          # Basiswährung der Hauptdatenbank (für Threads ohne Benutzer-Kontext)
+
+
+class _ConfigModule(types.ModuleType):
+    """config.BASE liest/schreibt die Basiswährung des aktuellen Benutzers (siehe CTX)."""
+
+    @property
+    def BASE(self):  # noqa: N802
+        return getattr(CTX, "base", None) or _BASE["main"]
+
+    @BASE.setter
+    def BASE(self, value):  # noqa: N802
+        if getattr(CTX, "db", None) is not None:
+            CTX.base = value
+        else:
+            _BASE["main"] = value
+
+
+sys.modules[__name__].__class__ = _ConfigModule

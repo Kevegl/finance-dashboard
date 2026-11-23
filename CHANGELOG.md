@@ -3,6 +3,21 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.3.0
+
+### Neu
+- **Mehrere Benutzer:** Auf der Anmeldeseite gibt es *Neues Konto erstellen*. Jeder Benutzer erhält ein eigenes
+  Dashboard mit eigenen Portfolios, Transaktionen, Einstellungen und eigener Anmeldung (Passwort, Zwei-Faktor,
+  Wiederherstellungscode) und sieht nur seine Daten. Technisch hat jeder weitere Benutzer eine eigene Datenbank
+  (`users/u<Nummer>.db`); die bisherige `finance.db` bleibt unverändert die des Administrators.
+- **Benutzerverwaltung:** Der Administrator (Benutzer aus der Ersteinrichtung) sieht unter *Einstellungen → Benutzer*
+  alle Benutzer, kann sie löschen und die Registrierung ausschalten. Updates installiert nur der Administrator.
+- *Passwort vergessen?* fragt zusätzlich nach dem Benutzernamen.
+
+*English:* Several users can now share one installation: *Create a new account* on the sign-in page gives each user
+their own dashboard (own database, portfolios, settings and sign-in). The administrator manages users and sign-up under
+*Settings → Users*.
+
 ## 1.2.1
 
 ### Verbessert

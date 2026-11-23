@@ -12,8 +12,9 @@ import importers
 import local_update
 from config import PRICE_TTL
 from validate import DATE_GLOB, is_iso_date
-from store import db_tx, get_setting, set_setting
-REFRESH_LOCK = threading.Lock()
+from store import current_db, db_tx, get_setting, set_setting
+REFRESH_LOCKS = {}                 # Datenbank -> Lock (jeder Benutzer hat eigene Kurse; pro Datenbank eine Aktualisierung)
+REFRESH_LOCKS_GUARD = threading.Lock()
 
 
 # --------------------------------------------------------------------------
@@ -266,7 +267,9 @@ def needed_tickers(con):
 
 
 def refresh_prices(force=False):
-    if not REFRESH_LOCK.acquire(blocking=False):
+    with REFRESH_LOCKS_GUARD:
+        lock = REFRESH_LOCKS.setdefault(str(current_db()), threading.Lock())
+    if not lock.acquire(blocking=False):
         return {"status": "läuft bereits"}
     errors = {}
     try:
@@ -304,7 +307,7 @@ def refresh_prices(force=False):
                                        ON CONFLICT(ticker) DO UPDATE SET fetched_at=excluded.fetched_at, error=excluded.error""",
                                     (t, time.time(), str(e)[:300]))
     finally:
-        REFRESH_LOCK.release()
+        lock.release()
     return {"status": "ok", "errors": errors}
 
 

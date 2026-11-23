@@ -12,7 +12,7 @@ import time
 import urllib.parse
 
 from config import DATA_DIR, LOCAL, MIN_PW, SESSION_DAYS
-from store import db_tx, get_setting, set_setting
+from store import current_uid, db_tx, get_setting, init_db, set_setting, user_context, user_db_path
 
 
 # --------------------------------------------------------------------------
@@ -48,39 +48,189 @@ def verify_pw(pw, stored):
 
 
 def auth_configured():
-    return bool(get_setting("auth_hash"))
+    """Ist der Administrator (Ersteinrichtung) angelegt? Erst dann gibt es Anmeldung und Registrierung."""
+    return bool(get_setting("auth_hash", main=True))
 
 
 def _th(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def create_session(user):
+def create_session(user, uid=None):
+    """Neue Sitzung für den aktuellen (bzw. angegebenen) Benutzer. Administrator: Tabelle sessions,
+    weitere Benutzer: user_sessions (beide in der Hauptdatenbank)."""
+    uid = current_uid() if uid is None else int(uid)
     token = secrets.token_urlsafe(32)
     now = time.time()
-    with db_tx() as con:
+    with db_tx(main=True) as con:
         con.execute("DELETE FROM sessions WHERE expires < ?", (now,))
-        con.execute("INSERT INTO sessions(token_hash,user,created,expires) VALUES (?,?,?,?)",
-                    (_th(token), user, now, now + SESSION_DAYS * 86400))
+        con.execute("DELETE FROM user_sessions WHERE expires < ?", (now,))
+        if uid == 0:
+            con.execute("INSERT INTO sessions(token_hash,user,created,expires) VALUES (?,?,?,?)",
+                        (_th(token), user, now, now + SESSION_DAYS * 86400))
+        else:
+            con.execute("INSERT INTO user_sessions(token_hash,uid,created,expires) VALUES (?,?,?,?)",
+                        (_th(token), uid, now, now + SESSION_DAYS * 86400))
     return token
 
 
-def session_user(token):
+def session_lookup(token):
+    """Gibt (uid, Benutzername, erstellt) der gültigen Sitzung zurück oder None."""
     if not token:
         return None
-    with db_tx() as con:
-        r = con.execute("SELECT user, expires FROM sessions WHERE token_hash=?", (_th(token),)).fetchone()
-    if not r or r["expires"] < time.time():
+    now = time.time()
+    with db_tx(main=True) as con:
+        r = con.execute("SELECT user, created, expires FROM sessions WHERE token_hash=?", (_th(token),)).fetchone()
+        if r:
+            if r["expires"] < now:
+                return None
+            owner = con.execute("SELECT value FROM settings WHERE key='auth_user'").fetchone()
+            return 0, (owner[0] if owner else None) or r["user"], r["created"]
+        r = con.execute("SELECT s.uid, s.created, s.expires, u.username FROM user_sessions s "
+                        "JOIN users u ON u.id = s.uid WHERE s.token_hash=?", (_th(token),)).fetchone()
+    if not r or r["expires"] < now:
         return None
-    return get_setting("auth_user") or r["user"]
+    return r["uid"], r["username"], r["created"]
 
 
-def revoke_sessions(keep_token=None):
-    with db_tx() as con:
-        if keep_token:
-            con.execute("DELETE FROM sessions WHERE token_hash != ?", (_th(keep_token),))
-        else:
-            con.execute("DELETE FROM sessions")
+def session_user(token):
+    r = session_lookup(token)
+    return r[1] if r else None
+
+
+def revoke_sessions(keep_token=None, uid=None):
+    """Meldet alle Sitzungen eines Benutzers ab (Standard: aktueller Benutzer), optional ausser keep_token."""
+    uid = current_uid() if uid is None else int(uid)
+    table, where, args = ("sessions", "1=1", []) if uid == 0 else ("user_sessions", "uid=?", [uid])
+    if keep_token:
+        where, args = where + " AND token_hash != ?", args + [_th(keep_token)]
+    with db_tx(main=True) as con:
+        con.execute(f"DELETE FROM {table} WHERE {where}", args)
+
+
+def count_sessions(uid=None):
+    uid = current_uid() if uid is None else int(uid)
+    with db_tx(main=True) as con:
+        if uid == 0:
+            return con.execute("SELECT COUNT(*) FROM sessions WHERE expires > ?", (time.time(),)).fetchone()[0]
+        return con.execute("SELECT COUNT(*) FROM user_sessions WHERE uid=? AND expires > ?",
+                           (uid, time.time())).fetchone()[0]
+
+
+# --- Mehrere Benutzer: Registrierung, Benutzerliste (nur Administrator), Löschen
+USERS_LOCK = threading.Lock()
+USERNAME_MAX = 40
+
+
+def check_username(name):
+    name = str(name or "").strip()
+    if not name or len(name) > USERNAME_MAX or any(ord(c) < 32 or ord(c) == 127 for c in name):
+        raise ValueError(f"Der Benutzername muss 1 bis {USERNAME_MAX} Zeichen lang sein.")
+    return name
+
+
+def name_key(name):
+    """Vergleichsschlüssel für Benutzernamen: Gross-/Kleinschreibung egal, auch bei Umlauten."""
+    return str(name or "").strip().casefold()
+
+
+def find_user(name):
+    """uid zum Benutzernamen (Gross-/Kleinschreibung egal): 0 = Administrator, None = unbekannt."""
+    name = str(name or "").strip()
+    if not name:
+        return None
+    owner = get_setting("auth_user", main=True) or ""
+    if owner and hmac.compare_digest(name_key(name).encode(), name_key(owner).encode()):
+        return 0
+    with db_tx(main=True) as con:
+        r = con.execute("SELECT id FROM users WHERE name_key = ?", (name_key(name),)).fetchone()
+    return r[0] if r else None
+
+
+def registration_open():
+    return get_setting("registration", "1", main=True) == "1"
+
+
+def create_user(name, password, lang=None):
+    """Registriert einen weiteren Benutzer mit eigener, leerer Datenbank. Gibt (uid, Wiederherstellungscode) zurück."""
+    name = check_username(name)
+    check_new_password(password)
+    with USERS_LOCK:
+        if find_user(name) is not None:
+            raise ValueError("Dieser Benutzername ist bereits vergeben.")
+        with db_tx(main=True) as con:
+            uid = con.execute("INSERT INTO users(username, name_key, created) VALUES (?,?,?)",
+                              (name, name_key(name), time.time())).lastrowid
+        _remove_db_files(uid)                         # Reste einer früher gelöschten Datenbank mit derselben Nummer
+        with user_context(uid):
+            init_db()
+            set_setting("auth_user", name)
+            set_setting("auth_hash", hash_pw(password))
+            if lang:
+                set_setting("lang", lang)
+            code = recovery_new()
+    return uid, code
+
+
+def rename_user(uid, name):
+    """Benutzername ändern (eindeutig über alle Benutzer)."""
+    name = check_username(name)
+    with USERS_LOCK:
+        other = find_user(name)
+        if other is not None and other != uid:
+            raise ValueError("Dieser Benutzername ist bereits vergeben.")
+        if uid:
+            with db_tx(main=True) as con:
+                con.execute("UPDATE users SET username=?, name_key=? WHERE id=?", (name, name_key(name), uid))
+        with user_context(uid):
+            set_setting("auth_user", name)
+    return name
+
+
+def list_users():
+    """Alle Benutzer für die Verwaltung durch den Administrator."""
+    out = [{"id": 0, "username": get_setting("auth_user", main=True) or "", "admin": True, "created": None}]
+    with db_tx(main=True) as con:
+        rows = [dict(r) for r in con.execute("SELECT id, username, created FROM users ORDER BY id")]
+    for r in rows:
+        try:
+            with user_context(r["id"]), db_tx() as con:
+                r["transactions"] = con.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
+        except sqlite3.Error:
+            r["transactions"] = None
+        out.append(dict(r, admin=False))
+    with db_tx(main=True) as con:
+        out[0]["transactions"] = con.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
+    return out
+
+
+def user_ids():
+    """Alle Benutzer inkl. Administrator (0) – z.B. für die Kurs-Aktualisierung im Hintergrund."""
+    with db_tx(main=True) as con:
+        return [0] + [r[0] for r in con.execute("SELECT id FROM users ORDER BY id")]
+
+
+def _remove_db_files(uid):
+    base = user_db_path(uid)
+    for suffix in ("", "-wal", "-shm", "-journal"):
+        try:
+            base.with_name(base.name + suffix).unlink()
+        except FileNotFoundError:
+            pass
+
+
+def delete_user(uid):
+    """Löscht einen weiteren Benutzer samt Datenbank und Sitzungen (nicht den Administrator)."""
+    uid = int(uid)
+    if uid <= 0:
+        raise ValueError("Der Administrator kann nicht gelöscht werden.")
+    with USERS_LOCK:
+        with db_tx(main=True) as con:
+            if not con.execute("SELECT 1 FROM users WHERE id=?", (uid,)).fetchone():
+                raise ValueError("Benutzer nicht gefunden.")
+            con.execute("DELETE FROM user_sessions WHERE uid=?", (uid,))
+            con.execute("DELETE FROM users WHERE id=?", (uid,))
+        _remove_db_files(uid)
 
 
 def check_new_password(pw):
@@ -111,7 +261,7 @@ def auth_log_summary(session_created):
     since = time.time() - 30 * 86400
     with db_tx() as con:
         rows = [dict(r) for r in con.execute("SELECT ts, event, ip, detail FROM auth_log ORDER BY id DESC LIMIT 30")]
-        last = con.execute("SELECT ts, ip FROM auth_log WHERE event IN ('login_ok','recovery_used','setup') AND ts < ? "
+        last = con.execute("SELECT ts, ip FROM auth_log WHERE event IN ('login_ok','recovery_used','setup','register') AND ts < ? "
                            "ORDER BY ts DESC LIMIT 1", (session_created or time.time(),)).fetchone()
         fails = con.execute(f"SELECT COUNT(*) FROM auth_log WHERE ts >= ? AND event IN ({','.join('?' * len(FAIL_EVENTS))})",
                             (since, *FAIL_EVENTS)).fetchone()[0]

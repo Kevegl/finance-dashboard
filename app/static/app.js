@@ -819,7 +819,7 @@ $("#btnRefresh").onclick = async () => {
 let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => state.summary && renderChart(), 120); });
 
 /* ---------- Anmeldung ---------- */
-let authMode = "login", authNeedCode = false, authSetupCode = false;
+let authMode = "login", authNeedCode = false, authSetupCode = false, authRegOpen = false, appShown = false;
 function showAuth(mode) {
   authMode = mode;
   $("#topbar").hidden = true; $("#app").hidden = true; $("#authView").hidden = false;
@@ -827,24 +827,32 @@ function showAuth(mode) {
   const rec = mode === "recover";
   $("#authForm").hidden = rec; $("#recForm").hidden = !rec;
   if (rec) { $("#recErr").hidden = true; $("#recForm").elements.rcode.focus(); return; }
-  if (mode === "setup") authNeedCode = false;
-  const setup = mode === "setup";
-  $("#authTitle").textContent = setup ? L("Willkommen – Zugang einrichten", "Welcome – set up your login") : L("Anmelden", "Sign in");
+  const setup = mode === "setup", reg = mode === "register";
+  if (setup || reg) authNeedCode = false;
+  $("#authTitle").textContent = setup ? L("Willkommen – Zugang einrichten", "Welcome – set up your login")
+    : reg ? L("Neues Konto erstellen", "Create a new account") : L("Anmelden", "Sign in");
   $("#authSub").textContent = setup
     ? L("Lege Benutzername und Passwort für dein Finanz-Dashboard fest. Mindestens 8 Zeichen.", "Choose a username and password for your finance dashboard. At least 8 characters.")
+    : reg ? L("Du erhältst ein eigenes, leeres Dashboard – andere Benutzer sehen deine Daten nicht. Passwort mindestens 8 Zeichen.",
+      "You get your own, empty dashboard – other users cannot see your data. Password at least 8 characters.")
     : L("Melde dich an, um dein Portfolio zu sehen.", "Sign in to see your portfolio.");
-  $("#authRepeat").hidden = !setup;
+  $("#authRepeat").hidden = !(setup || reg);
   $("#authSetupField").hidden = $("#authSetupHint").hidden = !(setup && authSetupCode);
   const f = $("#authForm");
-  f.elements.password.autocomplete = setup ? "new-password" : "current-password";
+  f.elements.password.autocomplete = setup || reg ? "new-password" : "current-password";
   if (setup && !f.elements.username.value) f.elements.username.value = "admin";
-  $("#authSubmit").textContent = setup ? L("Zugang einrichten", "Set up login") : L("Anmelden", "Sign in");
+  $("#authSubmit").textContent = setup ? L("Zugang einrichten", "Set up login") : reg ? L("Konto erstellen", "Create account") : L("Anmelden", "Sign in");
   $("#authErr").hidden = true;
-  $("#authCodeField").hidden = !authNeedCode; $("#authForgot").hidden = setup;
+  $("#authCodeField").hidden = !authNeedCode; $("#authForgot").hidden = setup || reg;
+  const rb = $("#authRegister");
+  rb.hidden = setup || !(authRegOpen || reg);
+  rb.textContent = reg ? L("Ich habe schon ein Konto – anmelden", "I already have an account – sign in") : L("Neues Konto erstellen", "Create a new account");
   (authNeedCode ? f.elements.code : setup && authSetupCode ? f.elements.setupcode
-    : setup || !f.elements.username.value ? f.elements.username : f.elements.password).focus();
+    : setup || reg || !f.elements.username.value ? f.elements.username : f.elements.password).focus();
 }
 function showApp() {
+  if (appShown) { location.reload(); return; }   // anderer Benutzer angemeldet: Seite mit frischem Zustand laden
+  appShown = true;
   $("#authView").hidden = true; $("#topbar").hidden = false; $("#app").hidden = false;
   applyRoute();
   load().catch((e) => toast(L("Laden fehlgeschlagen: ", "Loading failed: ") + e.message, 6000));
@@ -856,7 +864,8 @@ $("#authForm").onsubmit = async (e) => {
   const username = f.elements.username.value.trim(), password = f.elements.password.value;
   const fail = (m) => { err.textContent = m; err.hidden = false; };
   if (!username || !password) return fail(L("Bitte Benutzername und Passwort eingeben.", "Please enter username and password."));
-  if (authMode === "setup") {
+  const isNew = authMode === "setup" || authMode === "register";
+  if (isNew) {
     if (password.length < 8) return fail(L("Das Passwort muss mindestens 8 Zeichen lang sein.", "The password must be at least 8 characters long."));
     if (password !== f.elements.password2.value) return fail(L("Die Passwörter stimmen nicht überein.", "The passwords do not match."));
     if (authSetupCode && !f.elements.setupcode.value.trim()) return fail(L("Bitte den Einrichtungscode eingeben.", "Please enter the setup code."));
@@ -866,9 +875,12 @@ $("#authForm").onsubmit = async (e) => {
     const body = { username, password, lang: LANG };
     if (authMode !== "setup" && authNeedCode) body.code = f.elements.code.value.trim();
     if (authMode === "setup" && authSetupCode) body.setup_code = f.elements.setupcode.value.trim();
-    const r = await api(authMode === "setup" ? "/api/setup" : "/api/login", { method: "POST", body });
+    if (isNew) delete body.code;
+    const r = await api(authMode === "setup" ? "/api/setup" : authMode === "register" ? "/api/register" : "/api/login", { method: "POST", body });
     f.elements.password.value = ""; f.elements.password2.value = ""; f.elements.code.value = ""; f.elements.setupcode.value = "";
     authNeedCode = false;
+    if (r.lang && r.lang !== LANG) applyLanguage(r.lang);
+    if (typeof r.news === "boolean") state.newsOn = r.news;
     if (r.recovery_code) await showRecoveryCode(r.recovery_code);
     showApp();
   } catch (ex) {
@@ -880,7 +892,18 @@ $("#authForm").onsubmit = async (e) => {
   }
   $("#authSubmit").disabled = false;
 };
-$("#authForgot").onclick = () => { $("#authErr").hidden = true; showAuth("recover"); };
+$("#authForgot").onclick = () => {
+  $("#authErr").hidden = true;
+  const rf = $("#recForm");
+  if (!rf.elements.username.value) rf.elements.username.value = $("#authForm").elements.username.value.trim();
+  showAuth("recover");
+};
+$("#authRegister").onclick = () => {
+  const f = $("#authForm");
+  f.elements.password.value = ""; f.elements.password2.value = "";
+  if (authMode !== "register") f.elements.username.value = "";
+  showAuth(authMode === "register" ? "login" : "register");
+};
 $("#recBack").onclick = () => showAuth("login");
 $("#recForm").onsubmit = async (e) => {
   e.preventDefault();
@@ -893,7 +916,7 @@ $("#recForm").onsubmit = async (e) => {
   err.hidden = true;
   const btn = f.querySelector("button[type=submit]"); btn.disabled = true;
   try {
-    const r = await api("/api/recovery", { method: "POST", body: { code, password } });
+    const r = await api("/api/recovery", { method: "POST", body: { username: f.elements.username.value.trim(), code, password } });
     f.reset(); authNeedCode = false;
     await showRecoveryCode(r.recovery_code, true);
     showApp();
@@ -955,7 +978,7 @@ async function loadSettings() {
     $("#setTtl").textContent = L(`automatisch alle ${num(s.price_ttl_h, 1)} Stunden`, `automatically every ${num(s.price_ttl_h, 1)} hours`);
     $("#setLang").value = LANG;
     $("#setNews").checked = s.news !== false;
-    a.elements.username.value = s.user || "";
+    a.elements.username.value = s.user || ""; state.user = s.user || "";
     $("#setSessions").textContent = L(`${s.sessions} aktive ${s.sessions === 1 ? "Sitzung" : "Sitzungen"} (angemeldete Browser/Geräte). Sitzungen laufen nach 30 Tagen ab.`,
       `${s.sessions} active ${s.sessions === 1 ? "session" : "sessions"} (signed-in browsers/devices). Sessions expire after 30 days.`);
     renderTotp(s);
@@ -966,7 +989,9 @@ async function loadSettings() {
         + esc(L("Erzeuge jetzt einen und bewahre ihn sicher auf – ohne Code bleibt bei einem vergessenen Passwort lokal nur ein Neubeginn, bei dem alle Daten gelöscht werden (auf einem Server der Befehl im Container).",
           "Generate one now and keep it safe – without a code, a forgotten password locally means starting over with all data deleted (on a server: the command in the container)."));
     loadAuthLog();
-    loadUpdate(true).then(() => { if (updWaiting() || (upd.st && upd.st.busy)) { upd.since = upd.since || Date.now(); updPoll(); } });
+    $("#usersCard").hidden = !s.admin; $("#updCard").hidden = !s.admin;
+    if (s.admin) loadUsers();
+    if (s.admin) loadUpdate(true).then(() => { if (updWaiting() || (upd.st && upd.st.busy)) { upd.since = upd.since || Date.now(); updPoll(); } });
     $("#localCard").hidden = !s.local;
     state.localStarter = s.local ? s.local.starter : null;
     if (s.local) $("#setLocal").textContent = L(
@@ -1035,7 +1060,38 @@ const authEvent = (e) => ({
   setup_fail: L("Fehlversuch (Einrichtungscode)", "Failed attempt (setup code)"),
   recovery_new: L("Neuer Wiederherstellungscode", "New recovery code"), totp_on: L("Zwei-Faktor eingeschaltet", "Two-factor switched on"),
   totp_off: L("Zwei-Faktor ausgeschaltet", "Two-factor switched off"), reset_cli: L("Anmeldung per Befehl zurückgesetzt", "Sign-in reset via command"),
-  logout_others: L("Andere Geräte abgemeldet", "Other devices signed out") }[e] || e);
+  logout_others: L("Andere Geräte abgemeldet", "Other devices signed out"), register: L("Konto erstellt", "Account created"),
+  user_deleted: L("Benutzer gelöscht", "User deleted") }[e] || e);
+/* Benutzerverwaltung (nur Administrator) */
+async function loadUsers() {
+  try {
+    const r = await api("/api/users");
+    $("#setRegistration").checked = !!r.registration;
+    const list = $("#userList");
+    list.innerHTML = r.users.map((u) => `<div class="pf-row user-row" data-uid="${u.id}">
+        <span class="pf-name">${esc(u.username)}${u.admin ? ` <span class="active-chip">${L("Administrator", "Administrator")}</span>` : ""}${u.username === state.user ? ` <span class="hint">(${L("du", "you")})</span>` : ""}</span>
+        <span class="hint">${u.transactions == null ? "–" : u.transactions} ${L("Transaktionen", "transactions")}</span>
+        <span class="pf-actions">${u.admin ? "" : `<button class="btn small ghost danger" data-act="delete">${L("Löschen", "Delete")}</button>`}</span></div>`).join("");
+    for (const row of list.querySelectorAll(".user-row")) {
+      const btn = row.querySelector('[data-act="delete"]');
+      if (!btn) continue;
+      const name = row.querySelector(".pf-name").firstChild.textContent;
+      btn.onclick = async () => {
+        if (!(await confirmDialog(L(`Benutzer „${name}“ löschen?`, `Delete user “${name}”?`),
+          L("Das Konto und alle seine Portfolios, Transaktionen und Einstellungen werden endgültig gelöscht. Das lässt sich nicht rückgängig machen.",
+            "The account and all its portfolios, transactions and settings are deleted permanently. This cannot be undone.")))) return;
+        try { await api("/api/users/delete", { method: "POST", body: { id: Number(row.dataset.uid) } }); toast(L("Benutzer gelöscht", "User deleted")); loadUsers(); }
+        catch (e) { toast(e.message); }
+      };
+    }
+  } catch (e) { toast(e.message); }
+}
+$("#setRegistration").onchange = async (e) => {
+  try {
+    const r = await api("/api/users/registration", { method: "POST", body: { enabled: e.target.checked } });
+    toast(r.registration ? L("Registrierung erlaubt", "Sign-up allowed") : L("Registrierung ausgeschaltet", "Sign-up switched off"));
+  } catch (ex) { e.target.checked = !e.target.checked; toast(ex.message); }
+};
 async function loadAuthLog() {
   try {
     const r = await api("/api/auth/log");
@@ -1092,8 +1148,10 @@ $("#btnLogoutOthers").onclick = async () => {
 };
 $("#btnLogout").onclick = async () => {
   await api("/api/logout", { method: "POST" }).catch(() => {});
-  location.hash = ""; state.summary = null; state.txs = []; state.totpSetup = null; authNeedCode = false;
-  showAuth("login");
+  try { localStorage.removeItem("fd-pid"); } catch {}
+  // Seite neu laden: der nächste Benutzer beginnt mit leerem Zustand (Portfolios, Plan, Einstellungen)
+  history.replaceState(null, "", location.pathname + location.search);
+  location.reload();
 };
 $("#btnQuit").onclick = async () => {
   if (!(await confirmDialog(L("Dashboard beenden?", "Quit the dashboard?"),
@@ -1421,7 +1479,7 @@ $("#btnUpdRollback").onclick = async () => {
     const st = await fetch("/api/auth/status").then((r) => r.json());
     if (st.news === false) state.newsOn = false;
     if (st.lang && st.lang !== LANG) applyLanguage(st.lang);
-    authSetupCode = !!st.setup_code;
+    authSetupCode = !!st.setup_code; authRegOpen = !!st.registration;
     const wantRecover = location.hash === "#/passwort-vergessen";   // Link aus dem Statusfenster
     if (wantRecover) history.replaceState(null, "", location.pathname + location.search);
     if (st.setup_required) showAuth("setup");

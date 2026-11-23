@@ -6,8 +6,9 @@ Umgebungsvariablen:
   FD_PORT        (Standard 8080)
   FD_DATA_DIR    (Standard ./data)      – hier liegt die SQLite-Datenbank
   FD_BASE_CCY    (Standard CHF)         – Basiswährung des Dashboards
-  Anmeldung: wird beim ersten Aufruf im Browser festgelegt (Passwort-Hash in der Datenbank).
-  Passwort vergessen:  python3 server.py --reset-password
+  Anmeldung: wird beim ersten Aufruf im Browser festgelegt (Passwort-Hash in der Datenbank). Dieser erste Benutzer
+  ist Administrator; weitere Benutzer registrieren sich auf der Anmeldeseite und haben je eine eigene Datenbank.
+  Passwort vergessen:  python3 server.py --reset-password   (setzt die Anmeldung des Administrators zurück)
   FD_CERT/FD_KEY                        – Pfad zu TLS-Zertifikat/Schlüssel -> HTTPS
   FD_PRICE_TTL   (Standard 14400 s)     – wie oft Kurse automatisch aktualisiert werden
   FD_REPO_DIR                           – Git-Repository der Installation (setzt install.sh) -> Updates im Dashboard
@@ -16,7 +17,6 @@ Umgebungsvariablen:
                                           Updates über GitHub Releases, «Dashboard beenden»)
 """
 import csv
-import hmac
 import io
 import json
 import os
@@ -37,13 +37,14 @@ import local_update
 from config import (APP_VERSION, COOKIE, CURRENCIES, DATA_DIR, DOCKER, LANGS, LOCAL, MAX_BODY, PF_KINDS, PRICE_TTL,
     SESSION_DAYS, STATIC, TLS_CERT, TLS_KEY)
 from validate import import_problem, normalize_tx
-from store import (db_tx, ensure_asset, get_lang, get_setting, init_db, list_portfolios, make_backup, restore_backup,
-    set_setting, with_hashes)
+from store import (current_uid, db_tx, ensure_asset, get_lang, get_setting, init_db, list_portfolios, make_backup,
+    restore_backup, set_setting, spawn, use_user, user_context, with_hashes)
 from muni import MUNI_SOURCES, muni_state, refresh_muni_rates, save_muni_rates
-from auth import (SETUP_CODE_FILE, ServerBusy, TOTP_LOCK, _th, auth_configured, auth_log_summary, check_new_password,
-    create_session, hash_pw, log_auth, recovery_check, recovery_new, revoke_sessions, session_user, setup_code,
-    setup_code_clear, setup_code_ok, setup_code_pending, setup_code_required, totp_active, totp_match,
-    totp_new_secret, totp_off, totp_uri, totp_verify_login, verify_pw)
+from auth import (SETUP_CODE_FILE, ServerBusy, TOTP_LOCK, _th, auth_configured, auth_log_summary,
+    check_new_password, check_username, count_sessions, create_session, create_user, delete_user, find_user, hash_pw,
+    list_users, log_auth, recovery_check, recovery_new, registration_open, rename_user, revoke_sessions,
+    session_lookup, setup_code, setup_code_clear, setup_code_ok, setup_code_pending, setup_code_required, totp_active,
+    totp_match, totp_new_secret, totp_off, totp_uri, totp_verify_login, user_ids, verify_pw)
 from prices import refresh_prices
 from news import portfolio_news
 from portfolio import compute_summary
@@ -62,19 +63,28 @@ FAILED_LOCK = threading.Lock()
 BLOCK_LOGGED = {}      # IP -> Zeitpunkt des letzten Protokolleintrags «login_blocked»
 SETUP_LOCK = threading.Lock()   # Ersteinrichtung: nur eine gleichzeitig
 MAX_FAILS, FAIL_WINDOW = 5, 900   # 5 Fehlversuche in 15 Min. -> 15 Min. gesperrt
+REGISTERED = {}        # IP -> [Zeitpunkte von Registrierungen]
+MAX_REG, REG_WINDOW = 3, 3600     # höchstens 3 neue Konten pro Stunde und IP
 
 
 def background_refresher():
     while True:
         try:
-            refresh_prices()
+            uids = user_ids()
         except Exception as e:  # noqa: BLE001
-            print("Kurs-Aktualisierung fehlgeschlagen:", e)
-        for canton in MUNI_SOURCES:   # Steuerfüsse höchstens einmal täglich prüfen
-            try:
-                refresh_muni_rates(canton)
-            except Exception as e:  # noqa: BLE001
-                print("Steuerfüsse laden fehlgeschlagen:", e)
+            print("Benutzerliste nicht lesbar:", e)
+            uids = [0]
+        for uid in uids:              # jeder Benutzer hat seine eigene Datenbank (Kurse, Steuerfüsse)
+            with user_context(uid):
+                try:
+                    refresh_prices()
+                except Exception as e:  # noqa: BLE001
+                    print("Kurs-Aktualisierung fehlgeschlagen:", e)
+                for canton in MUNI_SOURCES:   # Steuerfüsse höchstens einmal täglich prüfen
+                    try:
+                        refresh_muni_rates(canton)
+                    except Exception as e:  # noqa: BLE001
+                        print("Steuerfüsse laden fehlgeschlagen:", e)
         time.sleep(max(300, PRICE_TTL // 2))
 
 
@@ -183,7 +193,7 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(n) if n else b"{}"
         return json.loads(raw.decode("utf-8") or "{}")
 
-    PUBLIC = {"/api/auth/status", "/api/login", "/api/setup", "/api/health", "/api/recovery"}
+    PUBLIC = {"/api/auth/status", "/api/login", "/api/setup", "/api/health", "/api/recovery", "/api/register"}
 
     def _log(self, event):
         if event == "login_blocked":     # während einer Sperre nur ein Eintrag pro Sperrfenster (kein Verdrängen)
@@ -204,10 +214,23 @@ class Handler(BaseHTTPRequestHandler):
         time.sleep(1)
         return self._send(status, {"error": msg})
 
-    def _new_session_reply(self, user, extra_body=None):
-        token = create_session(user)
-        return self._send(200, {"ok": True, **(extra_body or {})},
-                          extra={"Set-Cookie": self._cookie(token, SESSION_DAYS * 86400)})
+    def _reserve_registration(self):
+        ip, now = self.client_address[0], time.time()
+        with FAILED_LOCK:
+            for k in [k for k, v in REGISTERED.items() if not v or now - v[-1] >= REG_WINDOW]:
+                del REGISTERED[k]
+            hits = [t for t in REGISTERED.get(ip, []) if now - t < REG_WINDOW]
+            if len(hits) >= MAX_REG:
+                return False
+            REGISTERED[ip] = hits + [now]
+            return True
+
+    def _admin_only(self):
+        """Nur der Administrator (erster Benutzer) darf Updates, Benutzerverwaltung und «Dashboard beenden»."""
+        if current_uid() != 0:
+            self._send(403, {"error": "Das darf nur der Administrator."})
+            return False
+        return True
 
     def _local_host_ok(self):
         """Lokaler Betrieb: nur Aufrufe über 127.0.0.1/localhost annehmen. Schützt vor DNS-Rebinding (eine fremde
@@ -230,16 +253,19 @@ class Handler(BaseHTTPRequestHandler):
             if origin and urllib.parse.urlparse(origin).netloc != self.headers.get("Host"):
                 self._send(403, {"error": "Fremde Herkunft"})
                 return False
-        self.user = None
+        self.user, self.session = None, None
+        use_user(0)              # Standard: Hauptdatenbank; nach der Anmeldung die Datenbank des Benutzers
         if not path.startswith("/api/") or path in self.PUBLIC:
             return True
         if not auth_configured():
             self._send(401, {"error": "setup_required", "setup_code": setup_code_pending()})
             return False
-        self.user = session_user(self._token())
-        if not self.user:
+        self.session = session_lookup(self._token())
+        if not self.session:
             self._send(401, {"error": "login_required"})
             return False
+        self.user = self.session[1]
+        use_user(self.session[0])
         return True
 
     def _auth_api(self, path, body):
@@ -248,8 +274,10 @@ class Handler(BaseHTTPRequestHandler):
             with SETUP_LOCK:          # zwei gleichzeitige Einrichtungen: nur die erste gewinnt
                 if auth_configured():
                     return self._send(409, {"error": "Das Dashboard ist bereits eingerichtet."})
-                user = str(body.get("username") or "").strip()[:40] or "admin"
+                user = check_username(str(body.get("username") or "").strip()[:40] or "admin")
                 check_new_password(body.get("password"))
+                if find_user(user) is not None:
+                    return self._send(409, {"error": "Dieser Benutzername ist bereits vergeben."})
                 stamp = None
                 if setup_code_required():
                     stamp = self._reserve_attempt()
@@ -272,9 +300,10 @@ class Handler(BaseHTTPRequestHandler):
             stamp = self._reserve_attempt()
             if stamp is None:
                 return self._blocked_reply()
-            user = str(body.get("username") or "").strip()
-            ok = auth_configured() and hmac.compare_digest(user.lower().encode(), (get_setting("auth_user") or "").lower().encode()) \
-                and verify_pw(body.get("password") or "", get_setting("auth_hash"))
+            uid = find_user(body.get("username")) if auth_configured() else None
+            if uid is not None:
+                use_user(uid)                                   # Prüfung und Protokoll in der Datenbank des Benutzers
+            ok = uid is not None and verify_pw(body.get("password") or "", get_setting("auth_hash") or "")
             if not ok:
                 return self._fail(401, "Benutzername oder Passwort falsch.", "login_fail", counted=True)
             if totp_active():
@@ -286,13 +315,37 @@ class Handler(BaseHTTPRequestHandler):
             self._release_attempt(stamp)
             token = create_session(get_setting("auth_user"))
             self._log("login_ok")
-            return self._send(200, {"ok": True}, extra={"Set-Cookie": self._cookie(token, SESSION_DAYS * 86400)})
+            return self._send(200, {"ok": True, "lang": get_lang(), "news": get_setting("news", "1") == "1"},
+                              extra={"Set-Cookie": self._cookie(token, SESSION_DAYS * 86400)})
+        if path == "/api/register":
+            if not auth_configured():
+                return self._send(409, {"error": "Das Dashboard ist noch nicht eingerichtet."})
+            if not registration_open():
+                return self._send(403, {"error": "Die Registrierung ist ausgeschaltet."})
+            check_username(body.get("username"))
+            check_new_password(body.get("password"))
+            if find_user(body.get("username")) is not None:
+                raise ValueError("Dieser Benutzername ist bereits vergeben.")
+            if not self._reserve_registration():
+                return self._send(429, {"error": "Zu viele neue Konten – bitte später erneut versuchen."})
+            lang = body.get("lang") if body.get("lang") in LANGS else None
+            uid, code = create_user(body.get("username"), body["password"], lang)
+            use_user(uid)
+            self._log("register")
+            token = create_session(get_setting("auth_user"))
+            return self._send(200, {"ok": True, "user": get_setting("auth_user"), "recovery_code": code},
+                              extra={"Set-Cookie": self._cookie(token, SESSION_DAYS * 86400)})
         if path == "/api/recovery":
             stamp = self._reserve_attempt()
             if stamp is None:
                 return self._blocked_reply()
-            if not auth_configured() or not recovery_check(body.get("code")):
-                return self._fail(401, "Der Wiederherstellungscode ist falsch.", "recovery_fail", counted=True)
+            name = str(body.get("username") or "").strip()
+            uid = (find_user(name) if name else 0) if auth_configured() else None
+            if uid is not None:
+                use_user(uid)
+            if uid is None or not recovery_check(body.get("code")):
+                return self._fail(401, "Benutzername oder Wiederherstellungscode falsch." if name
+                                  else "Der Wiederherstellungscode ist falsch.", "recovery_fail", counted=True)
             self._release_attempt(stamp)
             check_new_password(body.get("password"))
             set_setting("auth_hash", hash_pw(body["password"]))
@@ -320,6 +373,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/muni-rates": "_get_muni_rates",
         "/api/portfolios": "_get_portfolios",
         "/api/backup": "_get_backup",
+        "/api/users": "_get_users",
     }
 
     POST_ROUTES = {
@@ -348,6 +402,8 @@ class Handler(BaseHTTPRequestHandler):
         "/api/account/totp/disable": "_post_account",
         "/api/account/recovery/new": "_post_account",
         "/api/account/logout-others": "_post_account",
+        "/api/users/delete": "_post_users_delete",
+        "/api/users/registration": "_post_users_registration",
     }
 
     def do_GET(self):
@@ -409,7 +465,7 @@ class Handler(BaseHTTPRequestHandler):
                 con.execute("UPDATE assets SET name=?, ticker=?, manual_price=?, asset_class=?, news_query=? WHERE symbol=?",
                             (b.get("name", ""), (b.get("ticker") or "").strip(), mp,
                              b.get("asset_class", "etf"), (b.get("news_query") or "").strip()[:80], sym))
-            threading.Thread(target=refresh_prices, daemon=True).start()
+            spawn(refresh_prices)
             return self._send(200, {"ok": True})
         except Exception as e:  # noqa: BLE001
             return self._send(400, {"error": str(e)})
@@ -441,28 +497,49 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(200, {"ok": True, "app": "finance-dashboard", "local": LOCAL})
 
     def _get_auth_status(self, path):
-        user = session_user(self._token()) if auth_configured() else None
+        sess = session_lookup(self._token()) if auth_configured() else None
+        if sess:
+            use_user(sess[0])                     # Sprache/News des angemeldeten Benutzers
         return self._send(200, {"setup_required": not auth_configured(), "setup_code": setup_code_pending(),
-                                "authenticated": bool(user), "user": user, "lang": get_lang(),
-                                "news": get_setting("news", "1") == "1"})
+                                "authenticated": bool(sess), "user": sess[1] if sess else None, "lang": get_lang(),
+                                "news": get_setting("news", "1") == "1",
+                                "registration": auth_configured() and registration_open()})
 
     def _get_settings(self, path):
         with db_tx() as con:
-            n_sess = con.execute("SELECT COUNT(*) FROM sessions WHERE expires > ?", (time.time(),)).fetchone()[0]
             n_tx = con.execute("SELECT COUNT(*) FROM transactions").fetchone()[0]
+        admin = current_uid() == 0
         return self._send(200, {"title": get_setting("title", "Portfolio"), "user": self.user, "base": config.BASE,
-                                "currencies": CURRENCIES, "sessions": n_sess, "transactions": n_tx, "totp": totp_active(),
+                                "admin": admin, "registration": registration_open() if admin else None,
+                                "currencies": CURRENCIES, "sessions": count_sessions(), "transactions": n_tx,
+                                "totp": totp_active(),
                                 "totp_pending": bool(get_setting("auth_totp_pending")),
                                 "recovery": bool(get_setting("auth_recovery_hash")), "https": bool(TLS_CERT and TLS_KEY),
                                 "price_ttl_h": round(PRICE_TTL / 3600, 1),
                                 "lang": get_lang(), "news": get_setting("news", "1") == "1",
                                 "local": {"data_dir": str(DATA_DIR), "version": APP_VERSION,
-                                          "starter": local_starter()} if LOCAL else None})
+                                          "starter": local_starter()} if LOCAL and admin else None})
 
     def _get_auth_log(self, path):
-        with db_tx() as con:
-            r = con.execute("SELECT created FROM sessions WHERE token_hash=?", (_th(self._token() or ""),)).fetchone()
-        return self._send(200, auth_log_summary(r["created"] if r else None))
+        return self._send(200, auth_log_summary(self.session[2] if self.session else None))
+
+    def _get_users(self, path):
+        if not self._admin_only():
+            return None
+        return self._send(200, {"users": list_users(), "registration": registration_open()})
+
+    def _post_users_delete(self, path, body):
+        if not self._admin_only():
+            return None
+        delete_user(int(body.get("id") or 0))
+        self._log("user_deleted")
+        return self._send(200, {"ok": True})
+
+    def _post_users_registration(self, path, body):
+        if not self._admin_only():
+            return None
+        set_setting("registration", "1" if body.get("enabled") else "0", main=True)
+        return self._send(200, {"ok": True, "registration": registration_open()})
 
     def _get_news(self, path):
         if get_setting("news", "1") != "1":
@@ -471,6 +548,8 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(200, {"items": portfolio_news(self._pid(), get_lang(), force), "enabled": True})
 
     def _get_update_status(self, path):
+        if not self._admin_only():
+            return None
         st = update_status()
         if urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("log") != ["1"]:
             st.pop("log", None)
@@ -546,8 +625,8 @@ class Handler(BaseHTTPRequestHandler):
             if body.get("new"):
                 check_new_password(body["new"])
             user = (body.get("username") or "").strip()[:40]
-            if user:
-                set_setting("auth_user", user)
+            if user and user != get_setting("auth_user"):
+                rename_user(current_uid(), user)
             if body.get("new"):
                 set_setting("auth_hash", hash_pw(body["new"]))
                 revoke_sessions(keep_token=self._token())
@@ -562,8 +641,9 @@ class Handler(BaseHTTPRequestHandler):
     def _post_logout(self, path, body):
         tok = self._token()
         if tok:
-            with db_tx() as con:
+            with db_tx(main=True) as con:
                 con.execute("DELETE FROM sessions WHERE token_hash=?", (_th(tok),))
+                con.execute("DELETE FROM user_sessions WHERE token_hash=?", (_th(tok),))
         return self._send(200, {"ok": True}, extra={"Set-Cookie": self._cookie("", 0)})
 
     def _post_import(self, path, body):
@@ -622,7 +702,7 @@ class Handler(BaseHTTPRequestHandler):
             con.execute("INSERT OR REPLACE INTO settings(key,value) VALUES ('news',?)", (news,))
         config.BASE = base
         if changed:   # Wechselkurse für die neue Basiswährung laden
-            threading.Thread(target=refresh_prices, daemon=True).start()
+            spawn(refresh_prices)
         return self._send(200, {"title": title, "base": base, "base_changed": changed,
                                 "lang": lang, "news": news == "1"})
 
@@ -663,7 +743,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _post_restore(self, path, body):
         counts = restore_backup(body.get("backup"))
-        threading.Thread(target=refresh_prices, daemon=True).start()
+        spawn(refresh_prices)
         return self._send(200, counts)
 
     def _post_transactions_delete_source(self, path, body):
@@ -677,11 +757,15 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(200, refresh_prices(force=True))
 
     def _post_update_request(self, path, body):
+        if not self._admin_only():
+            return None
         return self._send(200, {"ok": True, "request_id": request_update(body.get("action"))})
 
     def _post_local_quit(self, path, body):
         if not LOCAL:
             return self._send(404, {"error": "nicht gefunden"})
+        if not self._admin_only():
+            return None
         request_exit(0)
         return self._send(200, {"ok": True})
 
@@ -721,7 +805,7 @@ class Handler(BaseHTTPRequestHandler):
                                 (pid, t["date"], t["type"], t["asset"], t["quantity"], t["price"], t["currency"],
                                  t["fee"], t["total"], t["source"], t.get("note", ""), t["hash"]))
                 # Assets für Dividenden ohne Kauf nicht anlegen; neue Kurse laden
-                threading.Thread(target=refresh_prices, daemon=True).start()
+                spawn(refresh_prices)
                 return self._send(200, {"imported": len(new), "duplicates": len(txs) - len(new),
                                         "skipped": len(res["skipped"]), "provider": res["provider"]})
         res["transactions"] = txs
@@ -742,7 +826,7 @@ class Handler(BaseHTTPRequestHandler):
                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (self._pid(b), tx["date"], tx["type"], tx["asset"], tx["quantity"], tx["price"],
                          tx["currency"], tx["fee"], tx["total"], tx["source"], tx["note"], tx["hash"]))
-        threading.Thread(target=refresh_prices, daemon=True).start()
+        spawn(refresh_prices)
         return self._send(200, {"ok": True})
 
     def _edit_tx(self, tx_id, b):
@@ -756,7 +840,7 @@ class Handler(BaseHTTPRequestHandler):
                         (tx["date"], tx["type"], tx["asset"], tx["quantity"], tx["price"], tx["currency"], tx["fee"],
                          tx["total"], str(b.get("source") or "Manuell").strip(), tx["note"], tx_id))
             self._cleanup_assets(con)
-        threading.Thread(target=refresh_prices, daemon=True).start()
+        spawn(refresh_prices)
         return self._send(200, {"ok": True})
 
     def _export_csv(self, pid):
@@ -803,6 +887,9 @@ class Server(ThreadingHTTPServer):
 
 def main():
     init_db()
+    for uid in user_ids()[1:]:          # Datenbanken weiterer Benutzer ebenfalls migrieren
+        with user_context(uid):
+            init_db()
     if "--reset-password" in sys.argv:
         set_setting("auth_hash", None)
         set_setting("auth_user", None)
