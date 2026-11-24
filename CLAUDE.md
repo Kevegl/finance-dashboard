@@ -26,6 +26,8 @@ Sprache im Projekt: Deutsch (Schweizer Schreibweise, „ss“ statt „ß“), U
   **Major** (1.x → 2.0.0) nur bei Brüchen, z.B. Rollback mit derselben Datenbank nicht mehr möglich oder manuelle
   Schritte bei der Installation nötig – möglichst vermeiden. Mehrere Änderungen bis zum nächsten Release teilen sich
   eine Nummer (die höchste nötige Stufe), `app/VERSION` und CHANGELOG-Abschnitt werden dann nur angepasst.
+  Vorher immer `git fetch origin --tags` und prüfen, ob `v<app/VERSION>` schon als Tag existiert – dann ist diese
+  Version veröffentlicht und unveränderlich: neue Nummer und neuer CHANGELOG-Abschnitt.
 
 ## Datenschutz – das Repo soll später öffentlich werden
 - Niemals echte Finanzdaten committen: keine eigenen CSV/PDF-Exporte, Datenbank, Sicherungs-JSONs, Kontonummern,
