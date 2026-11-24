@@ -3,6 +3,18 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.3.1
+
+### Behoben
+- **Spalte 24h zeigte bei Aktien und ETFs vor Handelsbeginn 0 %:** Der Live-Kurs von Yahoo wurde mit dem heutigen
+  Datum gespeichert, obwohl die Börse (z.B. in den USA bis 15:30 Uhr Schweizer Zeit) noch geschlossen war. Er gilt
+  jetzt für den Handelstag, zu dem er gehört. Vor Handelsbeginn und am Wochenende zeigt die Spalte also die
+  Veränderung des letzten Handelstags, statt 0 %. Falsch gespeicherte Kurse werden bei der nächsten
+  Kursaktualisierung ersetzt. Kleinste Rundungsdifferenzen erscheinen nicht mehr als «▼ −0 %».
+
+*English:* Fixed: the *24h* column showed 0 % for stocks and ETFs before the market opened (and at weekends); it now
+shows the change on the last trading day. Prices stored with the wrong date are replaced on the next price refresh.
+
 ## 1.3.0
 
 ### Neu
@@ -14,17 +26,9 @@ Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHu
   alle Benutzer, kann sie löschen und die Registrierung ausschalten. Updates installiert nur der Administrator.
 - *Passwort vergessen?* fragt zusätzlich nach dem Benutzernamen.
 
-### Behoben
-- **Spalte 24h zeigte bei Aktien und ETFs vor Handelsbeginn 0 %:** Der Live-Kurs von Yahoo wurde mit dem heutigen
-  Datum gespeichert, obwohl die Börse (z.B. in den USA bis 15:30 Uhr Schweizer Zeit) noch geschlossen war. Er gilt
-  jetzt für den Handelstag, zu dem er gehört. Vor Handelsbeginn und am Wochenende zeigt die Spalte also die
-  Veränderung des letzten Handelstags, statt 0 %. Falsch gespeicherte Kurse werden bei der nächsten
-  Kursaktualisierung ersetzt. Kleinste Rundungsdifferenzen erscheinen nicht mehr als «▼ −0 %».
-
 *English:* Several users can now share one installation: *Create a new account* on the sign-in page gives each user
 their own dashboard (own database, portfolios, settings and sign-in). The administrator manages users and sign-up under
-*Settings → Users*. Fixed: the *24h* column showed 0 % for stocks and ETFs before the market opened; it now shows the
-change on the last trading day.
+*Settings → Users*.
 
 ## 1.2.1
 
