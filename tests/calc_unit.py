@@ -176,6 +176,17 @@ class Change24h(unittest.TestCase):
         self.assertIsNone(portfolio.change_24h(S([("2026-11-20", 99.0)]), today))
         self.assertIsNone(portfolio.change_24h(S([("2026-11-01", 1.0), ("2026-11-02", 2.0)]), today))
         self.assertIsNone(portfolio.change_24h(S([("2026-11-19", 0.0), ("2026-11-20", 2.0)]), today))
+        # Montag vor Handelsbeginn nach einem Feiertag (Freitag): letzter Kurs vom Donnerstag gilt noch
+        s = S([("2026-11-18", 100.0), ("2026-11-19", 102.0)])
+        self.assertAlmostEqual(portfolio.change_24h(s, date(2026, 11, 23)), 2.0)
+
+    def test_market_day(self):
+        from datetime import date, datetime, timezone
+        # Dienstag 10:46 in der Schweiz, US-Börse noch zu: Live-Kurs gehört zum Montag (Schluss 16:00 New York)
+        mon_close = int(datetime(2026, 11, 23, 21, 0, tzinfo=timezone.utc).timestamp())
+        day = prices.market_day({"regularMarketTime": mon_close, "gmtoffset": -18000})
+        self.assertEqual(day, "2026-11-23" if date.today() >= date(2026, 11, 23) else date.today().isoformat())
+        self.assertEqual(prices.market_day({}), date.today().isoformat())
 
 
 class SetupCode(unittest.TestCase):

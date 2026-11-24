@@ -23,7 +23,8 @@ def cash_effect(t, amount):
 def change_24h(s, today=None):
     """Kursveränderung in % gegenüber dem letzten Kurs vor dem Tag des aktuellen Kurses (Vortagesschluss).
 
-    Liefert None ohne Vergleichskurs oder wenn der letzte Kurs veraltet ist (älter als 3 Tage)."""
+    Bei Börsen vor Handelsbeginn und am Wochenende ist das die Veränderung des letzten Handelstags.
+    Liefert None ohne Vergleichskurs oder wenn der letzte Kurs veraltet ist (älter als 5 Tage, z.B. Feiertage)."""
     if not s or len(s.d) < 2:
         return None
     today = today or date.today()
@@ -31,7 +32,7 @@ def change_24h(s, today=None):
         last_day = datetime.strptime(s.d[-1], "%Y-%m-%d").date()
     except ValueError:
         return None
-    if last_day < today - timedelta(days=3):
+    if last_day < today - timedelta(days=5):
         return None
     ref_day = (last_day - timedelta(days=1)).isoformat()
     k = bisect.bisect_right(s.d, ref_day) - 1

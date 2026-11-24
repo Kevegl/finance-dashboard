@@ -423,9 +423,10 @@ function renderHoldings(s) {
       <td class="num"><b>${amt(h.value)}</b></td><td class="num">–</td>
       <td class="num">${h.value > 0 ? num(h.weight, 1) + " %" : "–"}</td></tr>`;
     const gcls = h.gain > 0 ? "up" : h.gain < 0 ? "down" : "";
-    const c24 = closed || h.change_24h == null ? null : h.change_24h;
+    const c24 = closed || h.change_24h == null ? null : Math.round(h.change_24h * 100) / 100 || 0;   // kein «−0 %»
     const c24cls = c24 > 0 ? "up" : c24 < 0 ? "down" : "";
-    const c24tip = L("Kursveränderung gegenüber dem Vortag (in Kurswährung)", "Price change vs. previous day (in quote currency)");
+    const c24tip = L("Kursveränderung gegenüber dem vorherigen Schlusskurs (in Kurswährung). Vor Handelsbeginn und am Wochenende: Veränderung des letzten Handelstags.",
+      "Price change vs. the previous close (in quote currency). Before the market opens and at weekends: change on the last trading day.");
     const src = h.price_source === "live" ? "" : `<div class="src-tag ${h.price_source === "letzter Kauf" ? "warn" : ""}">${esc(priceSource(h.price_source))}</div>`;
     return `<tr data-sym="${esc(h.symbol)}" style="${closed ? "opacity:.55" : ""}">
       <td><div class="asset"><span class="badge" style="background:${colorOf(h)}" title="${esc(titleOf(h))}">${esc(badgeText(h))}</span>

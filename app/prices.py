@@ -31,6 +31,19 @@ def http_json(url, timeout=15):
         return json.load(r)
 
 
+def market_day(meta):
+    """Handelstag des Live-Kurses (Ortszeit der Börse). Vor Handelsbeginn und am Wochenende ist das der letzte
+    Handelstag – nicht heute, sonst stünde der unveränderte Schlusskurs als heutiger Kurs da (24h = 0 %)."""
+    try:
+        t = int(meta["regularMarketTime"]) + int(meta.get("gmtoffset") or 0)
+        day = datetime.fromtimestamp(t, timezone.utc).date()
+        if day <= date.today() + timedelta(days=1):
+            return min(day, date.today()).isoformat()
+    except (KeyError, TypeError, ValueError, OverflowError, OSError):
+        pass
+    return date.today().isoformat()
+
+
 def fetch_yahoo(ticker, since=None):
     period1 = int(datetime.combine(since, datetime.min.time()).timestamp()) if since else 0
     path = ("/v8/finance/chart/" + urllib.parse.quote(ticker) +
@@ -63,7 +76,7 @@ def fetch_yahoo(ticker, since=None):
             out.append((datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%d"), c * factor))
     live = res["meta"].get("regularMarketPrice")
     if live:
-        out.append((date.today().isoformat(), live * factor))
+        out.append((market_day(res["meta"]), live * factor))
     return cur.upper(), out
 
 
@@ -296,6 +309,10 @@ def refresh_prices(force=False):
                 try:
                     cur, rows = fetch_prices(t, since)
                     with db_tx() as con:
+                        if rows:
+                            # Kurse, die früher mit einem zu späten Datum gespeichert wurden (Live-Kurs vor
+                            # Handelsbeginn als «heute»), durch den aktuellen Stand ersetzen
+                            con.execute("DELETE FROM prices WHERE ticker=? AND date>?", (t, max(d for d, _ in rows)))
                         con.executemany("INSERT OR REPLACE INTO prices(ticker,date,close) VALUES (?,?,?)",
                                         [(t, d, c) for d, c in rows])
                         con.execute("INSERT OR REPLACE INTO price_meta(ticker,currency,fetched_at,error) VALUES (?,?,?,NULL)",
