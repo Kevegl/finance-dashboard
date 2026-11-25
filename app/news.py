@@ -81,7 +81,11 @@ def fetch_news(query, lang, force=False):
         print(f"News für '{query}' ({lang}) nicht abrufbar: {e}")
         return hit[1] if hit else []
     with NEWS_LOCK:
-        NEWS_CACHE[key] = (time.time(), items)
+        now = time.time()
+        if len(NEWS_CACHE) > 300:      # abgelaufene Einträge entfernen, damit der Speicher nicht stetig wächst
+            for k in [k for k, v in NEWS_CACHE.items() if now - v[0] >= NEWS_TTL]:
+                del NEWS_CACHE[k]
+        NEWS_CACHE[key] = (now, items)
     return items
 
 

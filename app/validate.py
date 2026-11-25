@@ -27,17 +27,26 @@ def valid_date(s):
     return s
 
 
+MAX_ABS = 1e15     # grösster erlaubter Betrag (Menge, Kurs, Summe): Produkte und Summen bleiben endlich
+
+
 def fnum(v, default=0.0):
-    """Zahl aus einer Eingabe; leer -> default. Unendlich/NaN wären in JSON für den Browser unlesbar."""
+    """Zahl aus einer Eingabe; leer -> default. Unendlich/NaN und riesige Werte (deren Produkt unendlich würde)
+    wären in JSON für den Browser unlesbar und legten die ganze Übersicht lahm."""
     if v is None or v == "":
         return default
     try:
         x = float(v)
     except (TypeError, ValueError):
         raise ValueError("Ungültige Zahl") from None
-    if not math.isfinite(x):
+    if not math.isfinite(x) or abs(x) > MAX_ABS:
         raise ValueError("Ungültige Zahl")
     return x
+
+
+def sane_price(v):
+    """Gespeicherter manueller Kurs, falls brauchbar (endlich, > 0, im erlaubten Bereich), sonst None."""
+    return v if isinstance(v, (int, float)) and math.isfinite(v) and 0 < v <= MAX_ABS else None
 
 
 def normalize_tx(b, base):
@@ -71,6 +80,6 @@ def import_problem(t):
         return "Datum unlesbar"
     for k in ("quantity", "price", "fee", "total"):
         v = t.get(k)
-        if not isinstance(v, (int, float)) or not math.isfinite(v):
+        if not isinstance(v, (int, float)) or not math.isfinite(v) or abs(v) > MAX_ABS:
             return "ungültige Zahl"
     return None

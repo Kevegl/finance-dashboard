@@ -44,7 +44,10 @@ def parse_num(v):
     if not s or s in {"-", "--", "N/A", "n/a"}:
         return None
     neg = s.startswith("(") and s.endswith(")")
-    s = re.sub(r"[^\d,.\-eE]", "", s.replace("'", "").replace("’", ""))
+    s = s.replace("'", "").replace("’", "")
+    # e/E nur bei wissenschaftlicher Schreibweise behalten – sonst würde z.B. «EUR 12.50» zu «E12.50»
+    s = s.replace(" ", "") if re.fullmatch(r"[-+]?\d+(?:\.\d+)?[eE][-+]?\d+", s.replace(" ", "")) \
+        else re.sub(r"[^\d,.\-]", "", s)
     if not s or s in {"-", "."}:
         return None
     if "," in s and "." in s:

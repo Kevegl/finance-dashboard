@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 
 import config
 from config import FLOW_TYPES
-from validate import import_problem
+from validate import import_problem, sane_price
 from store import db_tx, get_setting
 from prices import Series
 
@@ -56,6 +56,8 @@ def compute_summary(pid):
         row = con.execute("SELECT COALESCE(kind,'standard') FROM portfolios WHERE id=?", (pid,)).fetchone()
         kind = row[0] if row else "standard"
         assets = {r["symbol"]: dict(r) for r in con.execute("SELECT * FROM assets")}
+        for a in assets.values():       # früher gespeicherte unbrauchbare Kurse (z.B. unendlich) ignorieren
+            a["manual_price"] = sane_price(a.get("manual_price"))
         meta = {r["ticker"]: dict(r) for r in con.execute("SELECT * FROM price_meta")}
 
         def series(t):

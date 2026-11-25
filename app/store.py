@@ -159,10 +159,10 @@ def restore_backup(data):
             con.execute(f"DELETE FROM {table}")
         for table, cols in BACKUP_TABLES.items():
             src_cols = data.get(table + "_columns") or cols
-            use = [c for c in src_cols if c in cols]
-            idx = [src_cols.index(c) for c in use]
             if not isinstance(src_cols, list) or not all(isinstance(c, str) for c in src_cols):
                 raise ValueError("Das ist keine gültige Sicherungsdatei des Finanz-Dashboards.")
+            use = [c for c in src_cols if c in cols]
+            idx = [src_cols.index(c) for c in use]
             rows = [[row[i] for i in idx] for row in data.get(table) or []
                     if isinstance(row, list) and len(row) == len(src_cols)]
             con.executemany(f"INSERT INTO {table} ({','.join(use)}) VALUES ({','.join('?' * len(use))})", rows)

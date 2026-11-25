@@ -36,7 +36,7 @@ import importers
 import local_update
 from config import (APP_VERSION, COOKIE, CURRENCIES, DATA_DIR, DOCKER, LANGS, LOCAL, MAX_BODY, PF_KINDS, PRICE_TTL,
     SESSION_DAYS, STATIC, TLS_CERT, TLS_KEY)
-from validate import import_problem, normalize_tx
+from validate import fnum, import_problem, normalize_tx
 from store import (current_uid, db_tx, ensure_asset, get_lang, get_setting, init_db, list_portfolios, make_backup,
     restore_backup, set_setting, spawn, use_user, user_context, with_hashes)
 from muni import MUNI_SOURCES, muni_state, refresh_muni_rates, save_muni_rates
@@ -44,7 +44,7 @@ from auth import (SETUP_CODE_FILE, ServerBusy, TOTP_LOCK, _th, auth_configured, 
     check_new_password, check_username, count_sessions, create_session, create_user, delete_user, find_user, hash_pw,
     list_users, log_auth, recovery_check, recovery_new, registration_open, rename_user, revoke_sessions,
     session_lookup, setup_code, setup_code_clear, setup_code_ok, setup_code_pending, setup_code_required, totp_active,
-    totp_match, totp_new_secret, totp_off, totp_uri, totp_verify_login, user_ids, verify_pw)
+    totp_match, totp_new_secret, totp_off, totp_uri, totp_verify_login, user_ids, verify_dummy, verify_pw)
 from prices import refresh_prices
 from news import portfolio_news
 from portfolio import compute_summary
@@ -303,7 +303,8 @@ class Handler(BaseHTTPRequestHandler):
             uid = find_user(body.get("username")) if auth_configured() else None
             if uid is not None:
                 use_user(uid)                                   # Prüfung und Protokoll in der Datenbank des Benutzers
-            ok = uid is not None and verify_pw(body.get("password") or "", get_setting("auth_hash") or "")
+            ok = (verify_pw(body.get("password") or "", get_setting("auth_hash") or "") if uid is not None
+                  else verify_dummy(body.get("password") or ""))
             if not ok:
                 return self._fail(401, "Benutzername oder Passwort falsch.", "login_fail", counted=True)
             if totp_active():
@@ -343,6 +344,8 @@ class Handler(BaseHTTPRequestHandler):
             uid = (find_user(name) if name else 0) if auth_configured() else None
             if uid is not None:
                 use_user(uid)
+            if uid is None:
+                verify_dummy(str(body.get("code") or ""))
             if uid is None or not recovery_check(body.get("code")):
                 return self._fail(401, "Benutzername oder Wiederherstellungscode falsch." if name
                                   else "Der Wiederherstellungscode ist falsch.", "recovery_fail", counted=True)
@@ -459,8 +462,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             sym = urllib.parse.unquote(m.group(1))
             b = self._json()
-            mp = b.get("manual_price")
-            mp = float(mp) if mp not in (None, "") else None
+            mp = fnum(b.get("manual_price"), None)
+            if mp is not None and mp < 0:
+                raise ValueError("Ungültige Zahl")
             with db_tx() as con:
                 con.execute("UPDATE assets SET name=?, ticker=?, manual_price=?, asset_class=?, news_query=? WHERE symbol=?",
                             (b.get("name", ""), (b.get("ticker") or "").strip(), mp,
@@ -477,9 +481,12 @@ class Handler(BaseHTTPRequestHandler):
         m = re.match(r"^/api/transactions/(\d+)$", path)
         if not m:
             return self._send(404, {"error": "nicht gefunden"})
-        with db_tx() as con:
-            con.execute("DELETE FROM transactions WHERE id=?", (int(m.group(1)),))
-            self._cleanup_assets(con)
+        try:
+            with db_tx() as con:
+                con.execute("DELETE FROM transactions WHERE id=?", (int(m.group(1)),))
+                self._cleanup_assets(con)
+        except Exception as e:  # noqa: BLE001
+            return self._send(500, {"error": str(e)})
         return self._send(200, {"ok": True})
 
     # --- GET-/POST-Endpunkte (über GET_ROUTES/POST_ROUTES aufgerufen)

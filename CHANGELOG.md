@@ -3,6 +3,25 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.3.3
+
+### Behoben
+- **Übersicht bleibt nicht mehr leer bei ungültigen Zahlen:** Ein manueller Kurs wie «inf» oder extrem grosse Mengen
+  bzw. Kurse liessen die ganze Übersicht mit einem Fehler leer. Solche Werte werden jetzt abgelehnt; bereits
+  gespeicherte unbrauchbare manuelle Kurse werden ignoriert.
+- **Import: Beträge mit Währungscode** wie «EUR 12.50», «12.50 EUR» oder «SEK 100» wurden als leer gelesen (nur
+  «CHF 50.00» funktionierte). Jetzt werden sie korrekt erkannt.
+- **Statusfenster (Programm/Python):** Wird *Neu beginnen* bestätigt, während das Dashboard startet oder aktualisiert
+  wird, erscheint jetzt ein Hinweis, statt dass scheinbar nichts passiert.
+- **Anmeldung:** Die Antwortzeit verrät nicht mehr, ob ein Benutzername existiert (auch beim Wiederherstellungscode).
+- **Kleinigkeiten:** Löschen einer Transaktion meldet Datenbankfehler verständlich; eine beschädigte Sicherungsdatei
+  ergibt die übliche Meldung statt eines internen Fehlers; der Nachrichten-Zwischenspeicher wächst nicht mehr endlos.
+
+*English:* Fixed: invalid numbers (e.g. a manual price of “inf” or huge quantities) no longer leave the overview empty;
+imported amounts with a currency code such as “EUR 12.50” are read correctly; the status window explains when “Start
+over” is not possible right now; login response times no longer reveal whether a user name exists; minor robustness
+fixes for deleting transactions, damaged backup files and the news cache.
+
 ## 1.3.2
 
 ### Verbessert

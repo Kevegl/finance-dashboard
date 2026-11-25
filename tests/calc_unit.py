@@ -68,6 +68,15 @@ class ParseNum(unittest.TestCase):
         self.assertIsNone(importers.parse_num("1e999"))
         self.assertIsNone(importers.parse_num("-1e999"))
 
+    def test_currency_letters(self):
+        P = importers.parse_num
+        self.assertEqual(P("EUR 12.50"), 12.5)
+        self.assertEqual(P("12.50 EUR"), 12.5)
+        self.assertEqual(P("SEK 1'000"), 1000.0)
+        self.assertEqual(P("Fee: 3"), 3.0)
+        self.assertEqual(P("1.2e3"), 1200.0)
+        self.assertEqual(P("2.5E-2"), 0.025)
+
 
 class Dates(unittest.TestCase):
     def test_iso_must_exist(self):
@@ -117,6 +126,14 @@ class NormalizeTx(unittest.TestCase):
         self.assertIsNone(validate.import_problem({"date": "2026-01-01", "quantity": 1, "price": 1, "fee": 0, "total": 1}))
         self.assertTrue(validate.import_problem({"date": "2026-01-01", "quantity": float("inf"), "price": 1, "fee": 0, "total": 1}))
         self.assertTrue(validate.import_problem({"date": "2024-13-45", "quantity": 1, "price": 1, "fee": 0, "total": 1}))
+        self.assertTrue(validate.import_problem({"date": "2026-01-01", "quantity": 1e16, "price": 1, "fee": 0, "total": 1}))
+
+    def test_manual_price(self):
+        self.assertEqual(validate.sane_price(12.5), 12.5)
+        for bad in (None, 0, -1, float("inf"), float("nan"), 1e308):
+            self.assertIsNone(validate.sane_price(bad), bad)
+        with self.assertRaises(ValueError):
+            validate.fnum("1e308")
 
 
 class Summary(unittest.TestCase):

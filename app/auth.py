@@ -47,6 +47,18 @@ def verify_pw(pw, stored):
     return hmac.compare_digest(calc, h)
 
 
+_DUMMY = {}
+
+
+def verify_dummy(pw):
+    """Gleich teure Prüfung gegen einen Zufalls-Hash, wenn der Benutzername unbekannt ist: Sonst verriete die
+    kürzere Antwortzeit, welche Benutzernamen existieren. Gibt immer False zurück."""
+    if "h" not in _DUMMY:
+        _DUMMY["h"] = hash_pw(secrets.token_hex(16))
+    verify_pw(pw, _DUMMY["h"])
+    return False
+
+
 def auth_configured():
     """Ist der Administrator (Ersteinrichtung) angelegt? Erst dann gibt es Anmeldung und Registrierung."""
     return bool(get_setting("auth_hash", main=True))

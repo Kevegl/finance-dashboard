@@ -30,6 +30,8 @@ TEXT = {
         "wipe_prompt": "Alle Daten werden endgültig gelöscht. Das lässt sich nicht rückgängig machen.\n\n"
                        "Zum Bestätigen ENTFERNEN eingeben:",
         "wipe_wrong": "Nicht bestätigt – es wurde nichts gelöscht.",
+        "wipe_busy": "Gerade nicht möglich, weil das Dashboard startet oder aktualisiert wird. Es wurde nichts "
+                     "gelöscht – bitte warten, bis es läuft, und erneut versuchen.",
     },
     "en": {
         "starting": "Starting …", "running": "Running on this computer", "updating": "Updating …",
@@ -48,6 +50,8 @@ TEXT = {
         "cancel": "Cancel",
         "wipe_prompt": "All data will be deleted permanently. This cannot be undone.\n\nType DELETE to confirm:",
         "wipe_wrong": "Not confirmed – nothing was deleted.",
+        "wipe_busy": "Not possible right now because the dashboard is starting or updating. Nothing was deleted – "
+                     "please wait until it is running and try again.",
     },
 }
 COLOR = {"running": "#1f9d55", "stopping": "#8a8a8a"}   # sonst orange (startet, aktualisiert)
@@ -159,8 +163,16 @@ class StatusWindow:
                 if answer is not None:
                     messagebox.showinfo(self.t("fg_title"), self.t("wipe_wrong"), parent=dlg)
                 return
+            if self.l.stopping or self.l.status != "running":
+                messagebox.showinfo(self.t("fg_title"), self.t("wipe_busy"), parent=dlg)
+                return
             dlg.destroy()
-            threading.Thread(target=self.l.start_fresh, daemon=True).start()
+
+            def go():
+                if not self.l.start_fresh():      # Zustand hat sich inzwischen geändert (z.B. Update)
+                    self.root.after(0, lambda: messagebox.showinfo(self.t("fg_title"), self.t("wipe_busy"),
+                                                                   parent=self.root))
+            threading.Thread(target=go, daemon=True).start()
 
         ttk.Button(frm, text=self.t("fg_wipe_btn"), command=wipe).grid(row=5, column=0, sticky="w")
         ttk.Button(frm, text=self.t("cancel"), command=dlg.destroy).grid(row=6, column=0, sticky="e", pady=(16, 0))
