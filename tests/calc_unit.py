@@ -197,6 +197,32 @@ class Change24h(unittest.TestCase):
         s = S([("2026-11-18", 100.0), ("2026-11-19", 102.0)])
         self.assertAlmostEqual(portfolio.change_24h(s, date(2026, 11, 23)), 2.0)
 
+    def test_day_prices(self):
+        from datetime import date
+        S = prices.Series
+        # Fonds: neuester Kurs von gestern (verzögert veröffentlicht) – Vergleich mit dem Kurs davor, nicht 0
+        s = S([("2026-11-17", 100.0), ("2026-11-18", 102.0)])
+        self.assertEqual(portfolio.day_prices(s, date(2026, 11, 20)), (100.0, 102.0))
+        self.assertIsNone(portfolio.day_prices(S([("2026-11-18", 1.0)]), date(2026, 11, 20)))
+
+    def test_summary_day_change_3a(self):
+        """Säule 3a: Fondskurs nur bis vorgestern bekannt – «zum Vortag» darf nicht 0 sein."""
+        from datetime import date, timedelta
+        d = lambda n: (date.today() - timedelta(days=n)).isoformat()
+        pid = new_portfolio("3a-Tag")
+        with store.db_tx() as con:
+            con.execute("UPDATE portfolios SET kind='3a' WHERE id=?", (pid,))
+        add(pid, d(30), "deposit", "CASH", total=1000.0)
+        add(pid, d(30), "buy", "CH0000000003", qty=10, price=90.0)
+        with store.db_tx() as con:
+            con.execute("UPDATE assets SET ticker='FUND3A.SW' WHERE symbol='CH0000000003'")
+            con.execute("INSERT OR REPLACE INTO price_meta(ticker,currency,fetched_at) VALUES ('FUND3A.SW','CHF',1)")
+            con.executemany("INSERT OR REPLACE INTO prices(ticker,date,close) VALUES ('FUND3A.SW',?,?)",
+                            [(d(3), 100.0), (d(2), 101.0)])
+        k = portfolio.compute_summary(pid)["kpis"]
+        self.assertAlmostEqual(k["day_change"], 10.0)
+        self.assertGreater(k["day_change_pct"], 0)
+
     def test_market_day(self):
         from datetime import date, datetime, timezone
         # Dienstag 10:46 in der Schweiz, US-Börse noch zu: Live-Kurs gehört zum Montag (Schluss 16:00 New York)

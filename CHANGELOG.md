@@ -3,6 +3,19 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.3.4
+
+### Behoben
+- **Tagesveränderung unter dem Gesamtwert (v.a. Säule 3a):** Die Zahl unter *Gesamtwert* blieb bei Portfolios mit
+  Fonds praktisch immer bei «CHF 0.00 (0 %) heute». Verglichen wurde der Wert von heute mit dem von gestern – Fonds
+  haben aber nur einen Kurs pro Handelstag, der oft erst verzögert erscheint, sodass beide Tage denselben Kurs hatten.
+  Jetzt wird wie in der Spalte *24h* der letzte Kurs mit dem des vorherigen Handelstags verglichen; die Zahl heisst
+  entsprechend «zum Vortag». Ein- und Auszahlungen zählen nicht mit.
+
+*English:* Fixed: the change below *Total value* stayed at “0.00 (0 %)” for portfolios with funds (e.g. pillar 3a),
+because fund prices are only published once per trading day and often late. It now compares the latest price with the
+previous trading day's price, like the *24h* column, and is labelled “vs. previous day”.
+
 ## 1.3.3
 
 ### Behoben

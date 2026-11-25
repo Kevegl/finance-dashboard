@@ -25,6 +25,12 @@ def change_24h(s, today=None):
 
     Bei Börsen vor Handelsbeginn und am Wochenende ist das die Veränderung des letzten Handelstags.
     Liefert None ohne Vergleichskurs oder wenn der letzte Kurs veraltet ist (älter als 5 Tage, z.B. Feiertage)."""
+    r = day_prices(s, today)
+    return (r[1] - r[0]) / r[0] * 100 if r else None
+
+
+def day_prices(s, today=None):
+    """(Vortageskurs, aktueller Kurs) wie bei change_24h, sonst None."""
     if not s or len(s.d) < 2:
         return None
     today = today or date.today()
@@ -41,7 +47,7 @@ def change_24h(s, today=None):
     ref, cur = s.v[k], s.v[-1]
     if not ref or cur is None:
         return None
-    return (cur - ref) / ref * 100
+    return ref, cur
 
 
 def compute_summary(pid):
@@ -140,6 +146,10 @@ def compute_summary(pid):
             p["acct_fees"] += abs(t["total_base"])
 
     holdings = []
+    # Tagesveränderung des Gesamtwerts: letzter Kurs gegen den Kurs des vorherigen Handelstags (wie die 24h-Spalte).
+    # Ein Vergleich «heute gegen gestern» im Kalender ergäbe 0, wenn der neueste Kurs älter als heute ist (z.B.
+    # Fonds der Säule 3a mit verzögert veröffentlichtem Kurs, Wochenende, vor Handelsbeginn).
+    day_delta, day_known = 0.0, False
     for sym, p in pos.items():
         a = assets.get(sym, {})
         price, ccy, price_src, chg = None, None, "—", None
@@ -152,6 +162,11 @@ def compute_summary(pid):
             price, ccy, price_src = p["last_tx_price"], p["last_tx_ccy"], "letzter Kauf"
         rate = fx_rate(ccy) if ccy else None
         value = p["qty"] * price * (rate if rate is not None else 1.0) if price else 0.0
+        if price_src == "live" and p["qty"] > 0:
+            dp = day_prices(price_series[sym])
+            if dp:
+                day_delta += p["qty"] * (dp[1] - dp[0]) * (rate if rate is not None else 1.0)
+                day_known = True
         holdings.append(dict(
             symbol=sym, name=a.get("name") or sym, asset_class=a.get("asset_class", "etf"),
             ticker=a.get("ticker", ""), manual_price=a.get("manual_price"), color_slot=a.get("color_slot", 0),
@@ -269,6 +284,9 @@ def compute_summary(pid):
                   realized=sum(h["realized"] for h in holdings),
                   dividends=sum(h["dividends"] for h in holdings), taxes=sum(h["taxes"] for h in holdings),
                   count=len(txs),
+                  day_change=day_delta if day_known else None,
+                  day_change_pct=(day_delta / (total_value - day_delta) * 100)
+                  if day_known and total_value - day_delta > 0 else None,
                   interest=sum(h["interest"] for h in holdings),
                   account_fees=sum(h["acct_fees"] for h in holdings),
                   trade_fees=sum(t["fee_base"] for t in txs if t["type"] in ("buy", "sell")),

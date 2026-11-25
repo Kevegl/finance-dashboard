@@ -285,7 +285,10 @@ function renderKpis(s, intro) {
   $("#kValuePeak").textContent = (f && Math.abs(f.cash) >= 0.005 ? L("inkl. Konto ", "incl. cash ") + amt(f.cash) + " · " : "")
     + (top && top[1] > 0 ? L(`Höchster Wert ${amt(top[1])} am ${dateCH(top[0])}`, `Peak value ${amt(top[1])} on ${dateCH(top[0])}`) : "");
   const dv = $("#kValueDelta");
-  if (h.length > 1) {
+  if (k.day_change != null) {
+    // letzter Kurs gegen den Kurs des vorherigen Handelstags (vom Server, wie die 24h-Spalte)
+    setDelta(dv, k.day_change, `${signed(k.day_change)} (${pct(k.day_change_pct)}) ${L("zum Vortag", "vs. previous day")}`, intro);
+  } else if (h.length > 1) {
     const prev = h[h.length - 2], cur = h[h.length - 1];
     const flow = cur[2] - prev[2];
     const d = cur[1] - prev[1] - flow;
