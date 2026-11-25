@@ -3,6 +3,18 @@
 Neue Versionen oben. Den Abschnitt einer Version beim Veröffentlichen auf GitHub als Release-Notizen einfügen
 (siehe README → «Neue Version veröffentlichen»).
 
+## 1.3.2
+
+### Verbessert
+- **Animationen im Dashboard:** Beim Öffnen des Dashboards (und beim Wechsel des Portfolios) zeichnet sich die
+  *Wertentwicklung* von links nach rechts. Gewinn/Verlust zählt hoch; positive Renditen steigen von unten, negative
+  fallen von oben ein (auch in den Spalten *24h* und *G/V* der Positionen). Der Unterstrich der Portfolio-Tabs gleitet
+  zum gewählten Portfolio. Bei «Bewegung reduzieren» im Betriebssystem werden die Werte nur sanft eingeblendet.
+
+*English:* Improved: the dashboard animates on opening – the performance chart draws from left to right, gains/losses
+count up and slide in by direction, and the portfolio tab underline slides to the selected tab. With “reduce motion”
+enabled, values only fade in.
+
 ## 1.3.1
 
 ### Behoben

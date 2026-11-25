@@ -23,6 +23,21 @@ const amt = (v, ccy, opts) => (state.hide ? `${esc(ccy || state.summary?.base ||
 const qtyS = (v) => (state.hide ? HIDDEN : qty(v));
 function pct(v) { return v == null || isNaN(v) ? "–" : (v > 0 ? "+" : "") + num(v, 2) + " %"; }
 function signed(v) { return (v > 0 ? "+" : v < 0 ? "−" : "") + (state.hide ? HIDDEN : money(Math.abs(v))); }
+/* ---------- Animation ---------- */
+const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+// Zahl hochzählen (easeOutQuint = cubic-bezier(0.23, 1, 0.32, 1)); ein neuer Aufruf bricht den laufenden ab
+function countUp(el, to, paint, animate, dur = 700) {
+  const token = (el._cu = {});
+  if (!animate || state.hide || reduceMotion() || !isFinite(to)) return paint(to);
+  const t0 = performance.now();
+  const step = (now) => {
+    if (el._cu !== token) return;
+    const t = Math.min(1, (now - t0) / dur);
+    paint(t < 1 ? to * (1 - Math.pow(1 - t, 5)) : to);
+    if (t < 1) requestAnimationFrame(step);
+  };
+  paint(0); requestAnimationFrame(step);
+}
 function dateCH(d) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d || "")) return esc(d);   // ungültiger Altbestand: unverändert, aber escapt
   const [y, m, dd] = d.split("-"); return LANG === "en" ? `${dd}/${m}/${y}` : `${dd}.${m}.${y}`;
@@ -178,10 +193,13 @@ function render() {
   renderBanner(s);
   if (!state.editingTitle) { $("#title").textContent = s.title || "Portfolio"; document.title = s.title || "Portfolio"; }
   if (!hasData) return;
-  renderKpis(s);
-  renderChart();
+  // Einblend-Animation nur beim Öffnen des Dashboards bzw. Portfolio-Wechsel, nicht bei jedem Neuzeichnen
+  const intro = state.intro && !$("#dashView").hidden;
+  if (intro) state.intro = false;
+  renderKpis(s, intro);
+  renderChart(intro);
   renderAlloc(s);
-  renderHoldings(s);
+  renderHoldings(s, intro);
   renderSources(s);
   renderTxs();
 }
@@ -214,12 +232,12 @@ function renderBanner(s) {
   b.hidden = !msgs.length;
 }
 
-function setDelta(el, v, text) {
-  el.className = "delta " + (v > 0 ? "up" : v < 0 ? "down" : "");
+function setDelta(el, v, text, intro) {
+  el.className = "delta " + (v > 0 ? "up" : v < 0 ? "down" : "") + (intro && v ? " ret-in" : "");
   el.innerHTML = `${v > 0 ? "▲" : v < 0 ? "▼" : ""} ${text}`;
 }
 
-function renderKpis(s) {
+function renderKpis(s, intro) {
   const k = s.kpis;
   const f = k.flows;
   document.querySelector("#kCost").previousElementSibling.textContent = f ? L("Selbst einbezahlt", "Paid in") : L("Investiert", "Invested");
@@ -243,12 +261,10 @@ function renderKpis(s) {
     if (f.withdrawals) tr.push(L("Auszahlungen ", "withdrawals ") + amt(f.withdrawals));
     if (acct || trade > 0.005) tr.push(L("Gebühren ", "fees ") + amt(k.fees));
     $("#kCount").textContent = tr.join(" · ");
-    $("#kGain").textContent = signed(k.gain_total);
-    setDelta($("#kGainPct"), k.gain_total, pct(k.gain_total_pct));
-  } else {
-    $("#kGain").textContent = signed(k.gain);
-    setDelta($("#kGainPct"), k.gain, pct(k.gain_pct));
   }
+  const gain = f ? k.gain_total : k.gain, gainPct = f ? k.gain_total_pct : k.gain_pct;
+  countUp($("#kGain"), gain, (v) => { $("#kGain").textContent = signed(v); }, intro);
+  countUp($("#kGainPct"), gainPct, (v) => setDelta($("#kGainPct"), gain, pct(v), intro), intro && gainPct != null);
   // Höchster Gewinn (Wert − investiertes Kapital) im gesamten Verlauf
   let peak = null;
   for (const p of s.history) if (!peak || p[1] - p[2] > peak[1] - peak[2]) peak = p;
@@ -274,7 +290,7 @@ function renderKpis(s) {
     const flow = cur[2] - prev[2];
     const d = cur[1] - prev[1] - flow;
     const p = prev[1] ? (d / prev[1]) * 100 : 0;
-    setDelta(dv, d, `${signed(d)} (${pct(p)}) ${L("heute", "today")}`);
+    setDelta(dv, d, `${signed(d)} (${pct(p)}) ${L("heute", "today")}`, intro);
   } else dv.textContent = "";
 }
 
@@ -313,7 +329,7 @@ function niceTicks(min, max, n = 4) {
   return t;
 }
 
-function renderChart() {
+function renderChart(intro = false) {
   const el = $("#chart");
   const data = rangeData();
   const W = el.clientWidth || 700, H = el.clientHeight || 300;
@@ -352,9 +368,11 @@ function renderChart() {
     ${ticks.map((t) => `<line class="gridline" x1="${m.l}" x2="${W - m.r}" y1="${Y(t)}" y2="${Y(t)}"/>
       <text class="axis-label" x="${m.l - 10}" y="${Y(t) + 4}" text-anchor="end">${state.hide ? "" : compact(t)}</text>`).join("")}
     ${xl.join("")}
-    <path class="area" d="${area}"/>
-    <path class="l-cost" d="${path(2)}"/>
-    <path class="l-value" d="${path(1)}"/>
+    <g class="plot${intro ? " intro" : ""}">
+      <path class="area" d="${area}"/>
+      <path class="l-cost" d="${path(2)}"/>
+      <path class="l-value" d="${path(1)}"/>
+    </g>
     <g id="hover" style="display:none">
       <line class="xhair" y1="${m.t}" y2="${H - m.b}"/>
       <circle class="dot" r="5" fill="${s1}" id="dotV"/>
@@ -413,7 +431,11 @@ function renderAlloc(s) {
 }
 
 /* ---------- Positionen ---------- */
-function renderHoldings(s) {
+function renderHoldings(s, intro) {
+  let n = 0;
+  // Rendite-Zelle: Gewinne steigen von unten, Verluste fallen von oben ein (gestaffelt, max. 300 ms Verzögerung)
+  const ret = (cls, html, tag = "span") => intro && cls
+    ? `<${tag} class="ret ret-in ${cls}" style="--d:${Math.min(300, 120 + 30 * n++)}ms">${html}</${tag}>` : html;
   const rows = s.holdings.map((h) => {
     const closed = h.quantity <= 0;
     if (h.is_cash) return `<tr data-sym="CASH" style="${closed ? "opacity:.55" : ""}">
@@ -434,9 +456,9 @@ function renderHoldings(s) {
       <td class="num">${closed ? L("geschlossen", "closed") : qtyS(h.quantity)}</td>
       <td class="num">${h.avg_price ? money(h.avg_price, h.avg_ccy) : "–"}</td>
       <td class="num">${h.price ? money(h.price, h.price_ccy) : "–"}${src}</td>
-      <td class="num ${c24cls}" title="${esc(c24tip)}">${c24 == null ? "–" : (c24 > 0 ? "▲ " : c24 < 0 ? "▼ " : "") + pct(c24)}</td>
+      <td class="num ${c24cls}" title="${esc(c24tip)}">${c24 == null ? "–" : ret(c24cls, (c24 > 0 ? "▲ " : c24 < 0 ? "▼ " : "") + pct(c24))}</td>
       <td class="num"><b>${amt(h.value)}</b></td>
-      <td class="num ${gcls}">${closed ? "–" : signed(h.gain)}<div class="src-tag">${closed ? "" : pct(h.gain_pct)}</div></td>
+      <td class="num ${gcls}">${closed ? "–<div class=\"src-tag\"></div>" : ret(gcls, `${signed(h.gain)}<div class="src-tag">${pct(h.gain_pct)}</div>`, "div")}</td>
       <td class="num">${closed ? "–" : num(h.weight, 1) + " %"}</td>
     </tr>`;
   }).join("");
@@ -817,7 +839,7 @@ $("#btnRefresh").onclick = async () => {
   } catch (e) { toast(e.message); }
   b.classList.remove("loading"); b.disabled = false;
 };
-let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => state.summary && renderChart(), 120); });
+let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (state.summary) renderChart(); tabIndPos = null; placeTabInd(); }, 120); });
 
 /* ---------- Anmeldung ---------- */
 let authMode = "login", authNeedCode = false, authSetupCode = false, authRegOpen = false, appShown = false;
@@ -853,7 +875,7 @@ function showAuth(mode) {
 }
 function showApp() {
   if (appShown) { location.reload(); return; }   // anderer Benutzer angemeldet: Seite mit frischem Zustand laden
-  appShown = true;
+  appShown = true; state.intro = true;
   $("#authView").hidden = true; $("#topbar").hidden = false; $("#app").hidden = false;
   applyRoute();
   load().catch((e) => toast(L("Laden fehlgeschlagen: ", "Loading failed: ") + e.message, 6000));
@@ -960,11 +982,13 @@ function showRecoveryCode(code, afterReset = false) {
 /* ---------- Einstellungen ---------- */
 function applyRoute() {
   const settings = location.hash === "#/einstellungen", plan = location.hash === "#/vorsorge";
+  const back = $("#dashView").hidden && !(settings || plan);
   $("#dashView").hidden = settings || plan; $("#settingsView").hidden = !settings; $("#planView").hidden = !plan;
   $("#btnSettings").classList.toggle("active", settings);
   $("#btnPlan").classList.toggle("active", plan);
   if (settings) loadSettings();
   if (plan && typeof loadPlan === "function") loadPlan();
+  if (back) { state.intro = true; if (state.summary) render(); }   // zurück zum Dashboard: wieder einblenden
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", applyRoute);
@@ -1179,11 +1203,32 @@ async function loadPortfolios() {
   state.pid = pid;
   renderTabs();
 }
+/* Unterstrich des aktiven Tabs gleitet zum neuen Tab. Das Element wird bei jedem renderTabs() neu eingefügt,
+   deshalb zuerst ohne Übergang auf die alte Position setzen, dann zur neuen animieren. */
+const tabInd = Object.assign(document.createElement("span"), { className: "pf-ind" });
+tabInd.setAttribute("aria-hidden", "true");
+let tabIndPos = null;
+function placeTabInd() {
+  const on = $("#pfTabs .pf-tab-wrap.on");
+  if (!on || !on.offsetWidth) { tabInd.style.opacity = "0"; tabIndPos = null; return; }
+  const pos = `translateX(${on.offsetLeft}px) scaleX(${on.offsetWidth})`;
+  if (tabIndPos && tabIndPos !== pos) {
+    tabInd.style.transition = "none"; tabInd.style.transform = tabIndPos;
+    void tabInd.offsetWidth;
+    tabInd.style.transition = "";
+  }
+  tabInd.style.opacity = ""; tabInd.style.transform = pos; tabIndPos = pos;
+}
 function renderTabs() {
   const nav = $("#pfTabs");
-  nav.innerHTML = state.portfolios.map((p) => `<span class="pf-tab-wrap ${p.id === state.pid ? "on" : ""}"><button class="pf-tab ${p.id === state.pid ? "on" : ""}" role="tab"
+  const html = state.portfolios.map((p) => `<span class="pf-tab-wrap ${p.id === state.pid ? "on" : ""}"><button class="pf-tab ${p.id === state.pid ? "on" : ""}" role="tab"
       aria-selected="${p.id === state.pid}" data-pid="${p.id}" title="${L("Doppelklick zum Umbenennen", "Double-click to rename")}">${esc(p.name)}${p.kind === "3a" ? '<span class="pf-kind">3a</span>' : ""}</button><button class="pf-del" data-del="${p.id}" title="${L("Portfolio löschen", "Delete portfolio")}" aria-label="${L("Portfolio löschen", "Delete portfolio")}: ${esc(p.name)}">✕</button></span>`).join("")
     + `<button class="pf-tab add" id="pfAdd" title="${L("Portfolio hinzufügen", "Add portfolio")}" aria-label="${L("Portfolio hinzufügen", "Add portfolio")}"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M7 1.5v11M1.5 7h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>`;
+  // Unveränderte Tabs nicht neu aufbauen – sonst bricht der laufende Übergang des Unterstrichs ab
+  if (nav._html === html && tabInd.isConnected) return placeTabInd();
+  nav.innerHTML = nav._html = html;
+  nav.prepend(tabInd);
+  placeTabInd();
   for (const b of nav.querySelectorAll("[data-pid]")) {
     b.onclick = () => switchPortfolio(Number(b.dataset.pid));
     b.ondblclick = () => renamePortfolioInline(b, Number(b.dataset.pid));
@@ -1228,7 +1273,7 @@ async function setPortfolioKind(pid, kind) {
 function savePid() { try { localStorage.setItem("fd-pid", String(state.pid)); } catch {} }
 async function switchPortfolio(pid) {
   if (pid === state.pid) return;
-  state.pid = pid; savePid();
+  state.pid = pid; savePid(); state.intro = true;
   state.sel.clear(); state.txLimit = 50;
   $("#txSearch").value = ""; $("#txSource").value = "";
   renderTabs();
@@ -1241,6 +1286,7 @@ function renamePortfolioInline(btn, pid) {
   input.className = "pf-input"; input.value = p.name; input.maxLength = 40;
   input.setAttribute("aria-label", L("Portfolio umbenennen", "Rename portfolio"));
   btn.replaceWith(input); input.focus(); input.select();
+  $("#pfTabs")._html = null;   // Tabs nach dem Umbenennen sicher neu aufbauen
   let done = false;
   const finish = async (save) => {
     if (done) return; done = true;

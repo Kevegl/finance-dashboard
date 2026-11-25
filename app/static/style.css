@@ -17,6 +17,8 @@
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
   --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
   --radius: 18px;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);       /* Ein- und Ausblenden */
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);   /* Bewegung auf dem Bildschirm */
   --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 :root[data-theme="dark"] {
@@ -146,6 +148,25 @@ main { padding: 24px clamp(16px, 4vw, 40px) 64px; max-width: 1360px; margin: 0 a
 .chart .l-value { fill: none; stroke: var(--s1); stroke-width: 2; stroke-linejoin: round; }
 .chart .l-cost { fill: none; stroke: var(--ink-2); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: .8; }
 .chart .area { fill: url(#gradValue); }
+/* Verlauf zeichnet sich beim Öffnen von links nach rechts (Clip statt Strich-Trick, weil «Investiert» gestrichelt ist) */
+.chart .plot.intro { animation: plot-reveal 800ms var(--ease-out) backwards; }
+@keyframes plot-reveal {
+  from { clip-path: inset(-10px 100% -10px -10px); }
+  to { clip-path: inset(-10px -10px -10px -10px); }
+}
+
+/* Rendite-Werte: Gewinne steigen von unten, Verluste fallen von oben ein */
+.ret { display: inline-block; }
+div.ret { display: block; }
+.ret-in.up { animation: ret-up 400ms var(--ease-out) var(--d, 120ms) backwards; }
+.ret-in.down { animation: ret-down 400ms var(--ease-out) var(--d, 120ms) backwards; }
+@keyframes ret-up { from { opacity: 0; transform: translateY(6px); } }
+@keyframes ret-down { from { opacity: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) {
+  .chart .plot.intro { animation: fade-in 300ms var(--ease-out) backwards; }
+  .ret-in.up, .ret-in.down { animation-name: fade-in; }
+}
+@keyframes fade-in { from { opacity: 0; } }
 .chart .xhair { stroke: var(--axis); stroke-width: 1; }
 .chart .dot { stroke: var(--surface); stroke-width: 2; }
 .chart .empty-msg { fill: var(--muted); font-size: 13px; }
@@ -343,14 +364,20 @@ a.btn { text-decoration: none; }
 @media (max-width: 640px) { .settings-form { grid-template-columns: minmax(0, 1fr); } }
 
 /* Portfolio-Tabs */
-.pf-tabs { display: flex; gap: 4px; align-items: flex-end; overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid var(--border); margin-bottom: -4px; scrollbar-width: none; }
+.pf-tabs { position: relative; display: flex; gap: 4px; align-items: flex-end; overflow-x: auto; overflow-y: hidden; border-bottom: 1px solid var(--border); margin-bottom: -4px; scrollbar-width: none; }
 .pf-tabs::-webkit-scrollbar { display: none; }
 .pf-tab-wrap {
   display: inline-flex; align-items: center; flex: none; border-radius: 8px 8px 0 0;
   border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
 .pf-tab-wrap:hover { background: var(--surface-2); }
-.pf-tab-wrap.on { border-bottom-color: var(--ink); }
+/* Gleitender Unterstrich: 1 px breit, per scaleX auf Tab-Breite gebracht – nur transform wird animiert */
+.pf-ind {
+  position: absolute; left: 0; bottom: 0; width: 1px; height: 2px; background: var(--ink);
+  transform-origin: 0 0; pointer-events: none;
+  transition: transform 250ms var(--ease-in-out);
+}
+@media (prefers-reduced-motion: reduce) { .pf-ind { transition: none; } }
 .pf-del {
   border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; line-height: 1;
   width: 22px; height: 22px; border-radius: 6px; margin: 0 6px 0 -6px; opacity: 0; flex: none;
